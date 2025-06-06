@@ -9,7 +9,11 @@ pub fn main() !void {
 
         defer win32.system.com.CoUninitialize();
 
-        try window_gen.init(.{ .fullscreen = false });
+        var win_settings = settings.WindowSettings{
+
+        };
+
+        try window_gen.init(&win_settings);
     }
 }
 
@@ -18,3 +22,4 @@ const window_gen = @import("window_gen.zig");
 const win32 = @import("win32");
 const COINIT = win32.system.com.COINIT_APARTMENTTHREADED;
 const builtin = @import("builtin");
+const settings = @import("setting.zig");

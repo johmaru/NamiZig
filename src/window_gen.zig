@@ -10,7 +10,7 @@ const S_OK: c.HRESULT = 0;
 var g_webview_environment: ?*anyopaque = null;
 var g_webview_controller: ?*anyopaque = null;
 
-pub fn init(settings: setting.WindowSettings) !void {
+pub fn init(settings: *setting.WindowSettings) !void {
     const os_tag = builtin.os.tag;
 
     switch (os_tag) {
@@ -27,7 +27,7 @@ pub fn init(settings: setting.WindowSettings) !void {
 }
 
 const win32 = @import("win32");
-fn win32_init(settings: setting.WindowSettings) !void {
+fn win32_init(settings: *setting.WindowSettings) !void {
 
     const WNDCLASSW = win32.ui.windows_and_messaging.WNDCLASSW;
     const MSG = win32.ui.windows_and_messaging.MSG;
@@ -41,14 +41,22 @@ fn win32_init(settings: setting.WindowSettings) !void {
         std.heap.page_allocator.free(slice_u8_to_free);
     }
 
+    if (settings.wnd_class_settings.hCursor == null) {
+        const hCursor = win32.ui.windows_and_messaging.LoadCursorW(null, win32.ui.windows_and_messaging.IDC_ARROW);
+        if (hCursor == null) {
+            return error.CursorLoadFailed;
+        }
+        settings.wnd_class_settings.hCursor = hCursor;
+    }
+
     var wc = WNDCLASSW{
-        .style = win32.ui.windows_and_messaging.WNDCLASS_STYLES{},
+        .style = settings.wnd_class_settings.wnd_style,
         .lpfnWndProc = windowProc,
-        .cbClsExtra = 0,
-        .cbWndExtra = 0,
+        .cbClsExtra = settings.wnd_class_settings.cbClsExtra,
+        .cbWndExtra = settings.wnd_class_settings.cbWndExtra,
         .hInstance = hInstance,
-        .hIcon = null,
-        .hCursor = win32.ui.windows_and_messaging.LoadCursorW(null, win32.ui.windows_and_messaging.IDC_ARROW),
+        .hIcon = if (settings.wnd_class_settings.hIcon) |icon| icon else null,
+        .hCursor = settings.wnd_class_settings.hCursor.?,
         .hbrBackground = @ptrFromInt(6),
         .lpszMenuName = null,
         .lpszClassName = class_name_utf16_z.ptr,
@@ -71,7 +79,7 @@ fn win32_init(settings: setting.WindowSettings) !void {
         width = win32.ui.windows_and_messaging.GetSystemMetrics(win32.ui.windows_and_messaging.SM_CXSCREEN);
         height = win32.ui.windows_and_messaging.GetSystemMetrics(win32.ui.windows_and_messaging.SM_CYSCREEN);
     } else {
-        window_style = win32.ui.windows_and_messaging.WS_OVERLAPPEDWINDOW;
+        window_style = settings.window_style;
         x = win32.ui.windows_and_messaging.CW_USEDEFAULT;
         y = win32.ui.windows_and_messaging.CW_USEDEFAULT;
         width = @intCast(settings.width);
@@ -95,8 +103,8 @@ fn win32_init(settings: setting.WindowSettings) !void {
         y,
         width,
         height,
-        null,
-        null,
+        if (settings.create_window_settings.hWndParent) |parent| parent else null,
+        settings.create_window_settings.hMenu,
         hInstance,
         null,
     );
