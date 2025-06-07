@@ -9,8 +9,13 @@ pub fn main() !void {
 
         defer win32.system.com.CoUninitialize();
 
-        var win_settings = settings.WindowSettings{
+        const webViewConttollerSettings = c.controllerSettings{
+            .contextMenu = false,
+        };
 
+        var win_settings = settings.WindowSettings{
+            .navigatge_to = "https://www.google.com",
+            .webview_controller_settings = webViewConttollerSettings,
         };
 
         try window_gen.init(&win_settings);
@@ -23,3 +28,6 @@ const win32 = @import("win32");
 const COINIT = win32.system.com.COINIT_APARTMENTTHREADED;
 const builtin = @import("builtin");
 const settings = @import("setting.zig");
+const c = @cImport({
+    @cInclude("webview_wrapper_c.h");
+});

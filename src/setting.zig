@@ -9,10 +9,12 @@ pub const WindowSettings = struct {
     height: u32 = 600,
     resizable: bool = true,
     fullscreen: bool = false,
+    navigatge_to: ?[:0] const u8 = null,
     start_position: WindowStartPostionSettings = WindowStartPostionSettings{},
     window_style: win32.ui.windows_and_messaging.WINDOW_STYLE = win32.ui.windows_and_messaging.WS_OVERLAPPEDWINDOW,
     wnd_class_settings: WndClassSettings = WndClassSettings{},
     create_window_settings: CreateWindowSettings = CreateWindowSettings{},
+    webview_controller_settings: c.controllerSettings,
 };
 
 // Default position is set to CW_USEDEFAULT, which is a special value that tells Windows to choose the default position. 

@@ -1,3 +1,4 @@
+#include <intsafe.h>
 #if defined(_M_X64) && !defined(_M_AMD64)
 #define _M_AMD64 _M_X64
 #endif
@@ -58,7 +59,7 @@ using namespace Microsoft::WRL;
 
 extern "C" {
     HRESULT create_webview_environment(void** environment);
-    HRESULT create_webview_controller(void* environment, HWND hwnd, void** controller);
+    HRESULT create_webview_controller(void* environment, HWND hwnd, void** controller, controllerSettings settings);
     HRESULT navigate_webview(void* controller_in, const char* url_utf8);
     void resize_webview(void* controller_in, RECT bounds);
     void cleanup_webview(void* controller, void* environment);
@@ -126,7 +127,7 @@ HRESULT create_webview_environment(void** environment) {
     #endif
 }
 
-HRESULT create_webview_controller(void* environment, HWND hwnd, void** controller) {
+HRESULT create_webview_controller(void* environment, HWND hwnd, void** controller, controllerSettings settings) {
     if (controller == nullptr || environment == nullptr || hwnd == nullptr) {
         return E_POINTER;
     }
@@ -144,7 +145,7 @@ HRESULT create_webview_controller(void* environment, HWND hwnd, void** controlle
     HRESULT hr_async_start = env->CreateCoreWebView2Controller(
         hwnd,
         Microsoft::WRL::Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
-            [controller, hwnd, hEvent, &callback_hr](HRESULT result, ICoreWebView2Controller* ctrl) -> HRESULT {
+            [controller, hwnd, hEvent, &callback_hr,settings](HRESULT result, ICoreWebView2Controller* ctrl) -> HRESULT {
 
                 OutputDebugStringA("CreateCoreWebView2Controller COMPLETED HANDLER called.\n");
                 char buffer[256];
@@ -163,6 +164,36 @@ HRESULT create_webview_controller(void* environment, HWND hwnd, void** controlle
                     if (ctrl != nullptr) {
                         *controller = ctrl;
                         ctrl->AddRef();
+
+                        if (settings.contextMenu) {
+                            ComPtr<ICoreWebView2> webview;
+                            HRESULT hr = ctrl->get_CoreWebView2(&webview);
+                            if (SUCCEEDED(hr) && webview != nullptr) {
+                                ComPtr<ICoreWebView2Settings> settings;
+                                HRESULT hr_settings = webview->get_Settings(&settings);
+                                if (SUCCEEDED(hr_settings) && settings != nullptr) {
+                                    settings->put_AreDefaultContextMenusEnabled(TRUE);
+                                    settings->Release();
+                                    OutputDebugStringA("Context menu enabled.\n");
+                                } else {
+                                    OutputDebugStringA("Failed to get WebView2 settings.\n");
+                                }
+                            }
+                        } else {
+                            ComPtr<ICoreWebView2> webview;
+                            HRESULT hr = ctrl->get_CoreWebView2(&webview);
+                            if (SUCCEEDED(hr) && webview != nullptr) {
+                                ComPtr<ICoreWebView2Settings> settings;
+                                HRESULT hr_settings = webview->get_Settings(&settings);
+                                if (SUCCEEDED(hr_settings) && settings != nullptr) {
+                                    settings->put_AreDefaultContextMenusEnabled(FALSE);
+                                    settings->Release();
+                                    OutputDebugStringA("Context menu disabled.\n");
+                                } else {
+                                    OutputDebugStringA("Failed to get WebView2 settings.\n");
+                                }
+                            }
+                        }
                     } else {
                         callback_hr = E_FAIL;
                         *controller = nullptr;

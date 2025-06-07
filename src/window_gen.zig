@@ -9,12 +9,14 @@ const S_OK: c.HRESULT = 0;
 
 var g_webview_environment: ?*anyopaque = null;
 var g_webview_controller: ?*anyopaque = null;
+var g_settings: *setting.WindowSettings = undefined;
 
 pub fn init(settings: *setting.WindowSettings) !void {
     const os_tag = builtin.os.tag;
 
     switch (os_tag) {
         .windows => {
+            g_settings = settings;
             try win32_init(settings);
         },
         .linux => {
@@ -31,6 +33,8 @@ fn win32_init(settings: *setting.WindowSettings) !void {
 
     const WNDCLASSW = win32.ui.windows_and_messaging.WNDCLASSW;
     const MSG = win32.ui.windows_and_messaging.MSG;
+
+    init_navigate_to = settings.navigatge_to;
 
     const hInstance = win32.system.library_loader.GetModuleHandleW(null);
 
@@ -133,6 +137,7 @@ fn win32_init(settings: *setting.WindowSettings) !void {
 }
 
 const CREATE_WEBVIEW_MSG: u32 = win32.ui.windows_and_messaging.WM_APP + 1;
+var init_navigate_to: ?[:0]const u8 = null;
 
 fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WPARAM, lParam: win32.foundation.LPARAM) callconv(std.os.windows.WINAPI) win32.foundation.LRESULT {
     switch (msg) {
@@ -166,7 +171,7 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
 
             if (g_webview_controller == null) {
                 const c_hwnd: c.HWND = @ptrFromInt(@intFromPtr(hwnd));
-                hr = c.create_webview_controller(g_webview_environment.?, c_hwnd, &g_webview_controller);
+                hr = c.create_webview_controller(g_webview_environment.?, c_hwnd, &g_webview_controller,g_settings.webview_controller_settings);
                 if (hr != S_OK) {
                     std.debug.print("WM_CREATE: create_webview_controller failed. HRESULT: 0x{X:0>8}\n", .{hr});
                     return -1;
@@ -183,8 +188,12 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                 };
                 c.resize_webview(g_webview_controller.?, init_rect);
 
-                const url_to_navigate: [:0]const u8 = "https://www.google.com";
-                hr = c.navigate_webview(g_webview_controller.?, url_to_navigate.ptr);
+                if (init_navigate_to == null) {
+                    std.debug.print("WIP Feature", .{});
+                    return -1;
+                }
+                
+                hr = c.navigate_webview(g_webview_controller.?, init_navigate_to.?.ptr);
                 if (hr != S_OK) {
                     std.debug.print("Failed to navigate in WM_CREATE. HRESULT: 0x{X:0>8}\n", .{hr});
                 }

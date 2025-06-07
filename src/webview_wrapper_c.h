@@ -1,6 +1,10 @@
 #ifndef WEBVIEW_WRAPPER_C_H
 #define WEBVIEW_WRAPPER_C_H
 
+#include <stdbool.h>
+typedef struct controllerSettings {
+    bool contextMenu;
+} controllerSettings;
 
 #ifndef __cplusplus
 typedef void *HWND;
@@ -24,7 +28,7 @@ extern "C" {
 #endif
 
 HRESULT create_webview_environment(void **environment);
-HRESULT create_webview_controller (void *environment, HWND hwnd, void **controller);
+HRESULT create_webview_controller (void *environment, HWND hwnd, void **controller, controllerSettings settings);
 HRESULT navigate_webview          (void *controller,  const char *url);
 void    resize_webview            (void *controller,  RECT bounds);
 void     cleanup_webview           (void *controller,  void *environment);
