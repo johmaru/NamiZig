@@ -5,6 +5,7 @@
 typedef struct controllerSettings {
     bool contextMenu;
     bool isVirtualHost;
+    const char *virtualHostName;
 } controllerSettings;
 
  
@@ -19,7 +20,6 @@ typedef struct tagRECT {
     long right;
     long bottom;
 } RECT;
-
 #define S_OK      ((HRESULT)0L)
 #define E_POINTER ((HRESULT)0x80004003L)
 #endif // !__cplusplus

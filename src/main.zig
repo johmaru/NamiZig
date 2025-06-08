@@ -9,9 +9,12 @@ pub fn main() !void {
 
         defer win32.system.com.CoUninitialize();
 
+        const virtualHostName= "testvirtualhost";
+
         const webViewConttollerSettings = c.controllerSettings{
             .contextMenu = false,
             .isVirtualHost = true,
+            .virtualHostName = virtualHostName,
         };
 
         var win_settings = settings.WindowSettings{
@@ -21,6 +24,10 @@ pub fn main() !void {
 
         try window_gen.init(&win_settings);
     }
+}
+
+fn toWideString(allocator: std.mem.Allocator, str: []const u8) ![:0]u16 {
+    return try std.unicode.utf8ToUtf16LeAllocZ(allocator, str);
 }
 
 const std = @import("std");

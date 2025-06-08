@@ -260,48 +260,78 @@ HRESULT create_webview_controller(void* environment, HWND hwnd, void** controlle
                                     );
 
                                     if (SUCCEEDED(hr_folder)) {
-                                        const wchar_t* subFolder = L"\\NamiZig";
-                                        size_t docPathLen = wcslen(documentPath);
-                                        size_t subFolderLen = wcslen(subFolder);
-                                        size_t folderPathLen = docPathLen + subFolderLen + 1;
-                                        wchar_t* folderPath = new (std::nothrow) wchar_t[folderPathLen];
-                                        if (folderPath != nullptr) {
-                                            swprintf_s(folderPath, folderPathLen, L"%s%s", documentPath, subFolder);
 
-                                            if (CreateDirectoryW(folderPath, NULL)) {
-                                                DWORD error = GetLastError();
-                                                if (error != ERROR_ALREADY_EXISTS) {
-                                                    char err_buffer[256];
-                                                    sprintf_s(err_buffer, sizeof(err_buffer), "Failed to create directory: %ls. Error: %lu\n", folderPath, error);
-                                                    OutputDebugStringA(err_buffer);
+                                        wchar_t* subFolder_wchar = nullptr;
+                                        int wideCharLen = 0;
+                                       
+                                        wideCharLen = MultiByteToWideChar(CP_UTF8, 0, settings.virtualHostName, -1, NULL, 0);
+                                            if (wideCharLen > 0) {
+                                                subFolder_wchar = new (std::nothrow) wchar_t[wideCharLen];
+                                                if (subFolder_wchar != nullptr) {
+                                                    if (MultiByteToWideChar(CP_UTF8, 0, settings.virtualHostName, -1, subFolder_wchar, wideCharLen) == 0) {
+                                                        
+                                                        delete[] subFolder_wchar;
+                                                        subFolder_wchar = nullptr;
+                                                        OutputDebugStringA("Failed to convert virtualHostName to wchar_t.\n");
+
+                                                    }
                                                 } else {
-                                                
+                                                    OutputDebugStringA("Failed to allocate memory for subFolder_wchar.\n");
+
                                                 }
                                             } else {
-                            
+                                                OutputDebugStringA("Failed to calculate length for subFolder_wchar or virtualHostName is empty.\n");
                                             }
+                                       
+                                        if (subFolder_wchar != nullptr) {
+                                            size_t docPathLen = wcslen(documentPath);
+                                            size_t subFolderLen = wcslen(subFolder_wchar);
+                                            size_t folderPathLen = docPathLen + 1 + subFolderLen + 1;
+                                            wchar_t* folderPath = new (std::nothrow) wchar_t[folderPathLen];
+                                            if (folderPath != nullptr) {
+                                                swprintf_s(folderPath, folderPathLen, L"%s\\%s", documentPath, subFolder_wchar);
 
-                                            hr = webview11->SetVirtualHostNameToFolderMapping(
-                                                hostName,
-                                                folderPath,
-                                                COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW
-                                            );
-                                            delete[] folderPath;
+                                                wchar_t dbgMsg[MAX_PATH + 100];
+                                                swprintf_s(dbgMsg, _countof(dbgMsg), L"Attempting to create directory at: %s\n", folderPath);
+                                                OutputDebugStringW(dbgMsg);
 
-                                            if (SUCCEEDED(hr)) {
-                                                OutputDebugStringA("Virtual host name mapping set successfully.\n");
+                                                DWORD sh_create_dir_result = SHCreateDirectoryExW(NULL, folderPath, NULL);
+                                                if (sh_create_dir_result == ERROR_SUCCESS || sh_create_dir_result == ERROR_ALREADY_EXISTS) {
+                                                    if (sh_create_dir_result == ERROR_SUCCESS) {
+                                                        OutputDebugStringA("SHCreateDirectoryExW call succeeded.\n");
+                                                    } else {
+                                                        OutputDebugStringA("Directory already existed (checked by SHCreateDirectoryExW).\n");
+                                                    }
+                                                } else {
+                                                    char err_buffer[256];
+                                                    
+                                                    sprintf_s(err_buffer, sizeof(err_buffer), "Failed to create directory using SHCreateDirectoryExW: %ls. Error: %lu\n", folderPath, sh_create_dir_result);
+                                                    OutputDebugStringA(err_buffer);
+                                                }
+
+                                                hr = webview11->SetVirtualHostNameToFolderMapping(
+                                                    hostName,
+                                                    folderPath,
+                                                    COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW
+                                                );
+                                                delete[] folderPath;
+
+                                                if (SUCCEEDED(hr)) {
+                                                    OutputDebugStringA("Virtual host name mapping set successfully.\n");
+                                                } else {
+                                                    char err_buffer[256];
+                                                    sprintf_s(err_buffer, sizeof(err_buffer), "Failed to set virtual host name mapping. HRESULT: 0x%lX\n", hr);
+                                                    OutputDebugStringA(err_buffer);
+                                                }
                                             } else {
-                                                char err_buffer[256];
-                                                sprintf_s(err_buffer, sizeof(err_buffer), "Failed to set virtual host name mapping. HRESULT: 0x%lX\n", hr);
-                                                OutputDebugStringA(err_buffer);
+                                                OutputDebugStringA("Failed to allocate memory for folder path.\n");
                                             }
+                                            delete[] subFolder_wchar;
                                         } else {
-                                            OutputDebugStringA("Failed to allocate memory for folder path.\n");
+                                            char err_buffer[256];
+                                            sprintf_s(err_buffer, sizeof(err_buffer), "Failed to get Documents folder. HRESULT: 0x%lX\n", hr_folder);
+                                            OutputDebugStringA(err_buffer);
                                         }
-                                    } else {
-                                        char err_buffer[256];
-                                        sprintf_s(err_buffer, sizeof(err_buffer), "Failed to get Documents folder. HRESULT: 0x%lX\n", hr_folder);
-                                        OutputDebugStringA(err_buffer);
                                     }
                                 } else {
                                     char err_buffer[256];

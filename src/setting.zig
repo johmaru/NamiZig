@@ -10,6 +10,7 @@ pub const WindowSettings = struct {
     resizable: bool = true,
     fullscreen: bool = false,
     navigatge_to: ?[:0] const u8 = null,
+    VirtualHostName: [:0] const u8 = "NamiZig",
     start_position: WindowStartPostionSettings = WindowStartPostionSettings{},
     window_style: win32.ui.windows_and_messaging.WINDOW_STYLE = win32.ui.windows_and_messaging.WS_OVERLAPPEDWINDOW,
     wnd_class_settings: WndClassSettings = WndClassSettings{},

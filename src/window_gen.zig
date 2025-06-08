@@ -172,7 +172,12 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
 
             if (g_webview_controller == null) {
                 const c_hwnd: c.HWND = @ptrFromInt(@intFromPtr(hwnd));
-                hr = c.create_webview_controller(g_webview_environment.?, c_hwnd, &g_webview_controller,g_settings.webview_controller_settings);
+                hr = c.create_webview_controller(
+          g_webview_environment.?,
+            c_hwnd,
+    &g_webview_controller,
+       g_settings.webview_controller_settings,
+             );
                 if (hr != S_OK) {
                     std.debug.print("WM_CREATE: create_webview_controller failed. HRESULT: 0x{X:0>8}\n", .{hr});
                     return -1;
