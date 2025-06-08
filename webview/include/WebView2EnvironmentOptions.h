@@ -25,7 +25,7 @@
 #include <wrl/implements.h>
 
 #include "WebView2.h"
-#define CORE_WEBVIEW_TARGET_PRODUCT_VERSION L"136.0.3240.44"
+#define CORE_WEBVIEW_TARGET_PRODUCT_VERSION L"137.0.3296.44"
 
 #define COREWEBVIEW2ENVIRONMENTOPTIONS_STRING_PROPERTY(p)     \
  public:                                                      \
@@ -209,7 +209,12 @@ class CoreWebView2CustomSchemeRegistrationBase
   COREWEBVIEW2ENVIRONMENTOPTIONS_BOOL_PROPERTY(TreatAsSecure, false)
   COREWEBVIEW2ENVIRONMENTOPTIONS_BOOL_PROPERTY(HasAuthorityComponent, false)
 
-  // TODO(task.ms/56073082): Use raw_ptr.
+  // WebView2EnvironmentOptions.h this is a publicly exposed header to clients
+  // and it used by them to integrate the webview2 enviorment as published at
+  // https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2environmentoptions?view=webview2-1.0.3179.45
+  // This file is not included in msedge.dll/lib/exe and is limited to WebView2
+  // SDK which does not use partition alloc. So need to use raw_ptr_exclusion
+  // here.
 #if defined(__has_attribute)
   __attribute__((annotate("raw_ptr_exclusion")))
 #endif

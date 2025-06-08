@@ -805,6 +805,13 @@ typedef interface ICoreWebView2ControllerOptions2 ICoreWebView2ControllerOptions
 #endif 	/* __ICoreWebView2ControllerOptions2_FWD_DEFINED__ */
 
 
+#ifndef __ICoreWebView2ControllerOptions3_FWD_DEFINED__
+#define __ICoreWebView2ControllerOptions3_FWD_DEFINED__
+typedef interface ICoreWebView2ControllerOptions3 ICoreWebView2ControllerOptions3;
+
+#endif 	/* __ICoreWebView2ControllerOptions3_FWD_DEFINED__ */
+
+
 #ifndef __ICoreWebView2Cookie_FWD_DEFINED__
 #define __ICoreWebView2Cookie_FWD_DEFINED__
 typedef interface ICoreWebView2Cookie ICoreWebView2Cookie;
@@ -1843,6 +1850,7 @@ extern "C"{
 
 /* library WebView2 */
 /* [version][uuid] */ 
+
 
 
 
@@ -37969,6 +37977,151 @@ EXTERN_C __declspec(selectany) const IID IID_ICoreWebView2ControllerOptions2 = {
 
 
 #endif 	/* __ICoreWebView2ControllerOptions2_INTERFACE_DEFINED__ */
+
+
+#ifndef __ICoreWebView2ControllerOptions3_INTERFACE_DEFINED__
+#define __ICoreWebView2ControllerOptions3_INTERFACE_DEFINED__
+
+/* interface ICoreWebView2ControllerOptions3 */
+/* [unique][object][uuid] */ 
+
+
+EXTERN_C __declspec(selectany) const IID IID_ICoreWebView2ControllerOptions3 = {0xb32b191a,0x8998,0x57ca,{0xb7,0xcb,0xe0,0x46,0x17,0xe4,0xce,0x4a}};
+
+#if defined(__cplusplus) && !defined(CINTERFACE)
+    
+    MIDL_INTERFACE("b32b191a-8998-57ca-b7cb-e04617e4ce4a")
+    ICoreWebView2ControllerOptions3 : public ICoreWebView2ControllerOptions2
+    {
+    public:
+        virtual /* [propget] */ HRESULT STDMETHODCALLTYPE get_DefaultBackgroundColor( 
+            /* [retval][out] */ COREWEBVIEW2_COLOR *value) = 0;
+        
+        virtual /* [propput] */ HRESULT STDMETHODCALLTYPE put_DefaultBackgroundColor( 
+            /* [in] */ COREWEBVIEW2_COLOR value) = 0;
+        
+    };
+    
+    
+#else 	/* C style interface */
+
+    typedef struct ICoreWebView2ControllerOptions3Vtbl
+    {
+        BEGIN_INTERFACE
+        
+        DECLSPEC_XFGVIRT(IUnknown, QueryInterface)
+        HRESULT ( STDMETHODCALLTYPE *QueryInterface )( 
+            ICoreWebView2ControllerOptions3 * This,
+            /* [in] */ REFIID riid,
+            /* [annotation][iid_is][out] */ 
+            _COM_Outptr_  void **ppvObject);
+        
+        DECLSPEC_XFGVIRT(IUnknown, AddRef)
+        ULONG ( STDMETHODCALLTYPE *AddRef )( 
+            ICoreWebView2ControllerOptions3 * This);
+        
+        DECLSPEC_XFGVIRT(IUnknown, Release)
+        ULONG ( STDMETHODCALLTYPE *Release )( 
+            ICoreWebView2ControllerOptions3 * This);
+        
+        DECLSPEC_XFGVIRT(ICoreWebView2ControllerOptions, get_ProfileName)
+        /* [propget] */ HRESULT ( STDMETHODCALLTYPE *get_ProfileName )( 
+            ICoreWebView2ControllerOptions3 * This,
+            /* [retval][out] */ LPWSTR *value);
+        
+        DECLSPEC_XFGVIRT(ICoreWebView2ControllerOptions, put_ProfileName)
+        /* [propput] */ HRESULT ( STDMETHODCALLTYPE *put_ProfileName )( 
+            ICoreWebView2ControllerOptions3 * This,
+            /* [in] */ LPCWSTR value);
+        
+        DECLSPEC_XFGVIRT(ICoreWebView2ControllerOptions, get_IsInPrivateModeEnabled)
+        /* [propget] */ HRESULT ( STDMETHODCALLTYPE *get_IsInPrivateModeEnabled )( 
+            ICoreWebView2ControllerOptions3 * This,
+            /* [retval][out] */ BOOL *value);
+        
+        DECLSPEC_XFGVIRT(ICoreWebView2ControllerOptions, put_IsInPrivateModeEnabled)
+        /* [propput] */ HRESULT ( STDMETHODCALLTYPE *put_IsInPrivateModeEnabled )( 
+            ICoreWebView2ControllerOptions3 * This,
+            /* [in] */ BOOL value);
+        
+        DECLSPEC_XFGVIRT(ICoreWebView2ControllerOptions2, get_ScriptLocale)
+        /* [propget] */ HRESULT ( STDMETHODCALLTYPE *get_ScriptLocale )( 
+            ICoreWebView2ControllerOptions3 * This,
+            /* [retval][out] */ LPWSTR *value);
+        
+        DECLSPEC_XFGVIRT(ICoreWebView2ControllerOptions2, put_ScriptLocale)
+        /* [propput] */ HRESULT ( STDMETHODCALLTYPE *put_ScriptLocale )( 
+            ICoreWebView2ControllerOptions3 * This,
+            /* [in] */ LPCWSTR value);
+        
+        DECLSPEC_XFGVIRT(ICoreWebView2ControllerOptions3, get_DefaultBackgroundColor)
+        /* [propget] */ HRESULT ( STDMETHODCALLTYPE *get_DefaultBackgroundColor )( 
+            ICoreWebView2ControllerOptions3 * This,
+            /* [retval][out] */ COREWEBVIEW2_COLOR *value);
+        
+        DECLSPEC_XFGVIRT(ICoreWebView2ControllerOptions3, put_DefaultBackgroundColor)
+        /* [propput] */ HRESULT ( STDMETHODCALLTYPE *put_DefaultBackgroundColor )( 
+            ICoreWebView2ControllerOptions3 * This,
+            /* [in] */ COREWEBVIEW2_COLOR value);
+        
+        END_INTERFACE
+    } ICoreWebView2ControllerOptions3Vtbl;
+
+    interface ICoreWebView2ControllerOptions3
+    {
+        CONST_VTBL struct ICoreWebView2ControllerOptions3Vtbl *lpVtbl;
+    };
+
+    
+
+#ifdef COBJMACROS
+
+
+#define ICoreWebView2ControllerOptions3_QueryInterface(This,riid,ppvObject)	\
+    ( (This)->lpVtbl -> QueryInterface(This,riid,ppvObject) ) 
+
+#define ICoreWebView2ControllerOptions3_AddRef(This)	\
+    ( (This)->lpVtbl -> AddRef(This) ) 
+
+#define ICoreWebView2ControllerOptions3_Release(This)	\
+    ( (This)->lpVtbl -> Release(This) ) 
+
+
+#define ICoreWebView2ControllerOptions3_get_ProfileName(This,value)	\
+    ( (This)->lpVtbl -> get_ProfileName(This,value) ) 
+
+#define ICoreWebView2ControllerOptions3_put_ProfileName(This,value)	\
+    ( (This)->lpVtbl -> put_ProfileName(This,value) ) 
+
+#define ICoreWebView2ControllerOptions3_get_IsInPrivateModeEnabled(This,value)	\
+    ( (This)->lpVtbl -> get_IsInPrivateModeEnabled(This,value) ) 
+
+#define ICoreWebView2ControllerOptions3_put_IsInPrivateModeEnabled(This,value)	\
+    ( (This)->lpVtbl -> put_IsInPrivateModeEnabled(This,value) ) 
+
+
+#define ICoreWebView2ControllerOptions3_get_ScriptLocale(This,value)	\
+    ( (This)->lpVtbl -> get_ScriptLocale(This,value) ) 
+
+#define ICoreWebView2ControllerOptions3_put_ScriptLocale(This,value)	\
+    ( (This)->lpVtbl -> put_ScriptLocale(This,value) ) 
+
+
+#define ICoreWebView2ControllerOptions3_get_DefaultBackgroundColor(This,value)	\
+    ( (This)->lpVtbl -> get_DefaultBackgroundColor(This,value) ) 
+
+#define ICoreWebView2ControllerOptions3_put_DefaultBackgroundColor(This,value)	\
+    ( (This)->lpVtbl -> put_DefaultBackgroundColor(This,value) ) 
+
+#endif /* COBJMACROS */
+
+
+#endif 	/* C style interface */
+
+
+
+
+#endif 	/* __ICoreWebView2ControllerOptions3_INTERFACE_DEFINED__ */
 
 
 #ifndef __ICoreWebView2Cookie_INTERFACE_DEFINED__

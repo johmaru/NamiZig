@@ -4,8 +4,10 @@
 #include <stdbool.h>
 typedef struct controllerSettings {
     bool contextMenu;
+    bool isVirtualHost;
 } controllerSettings;
 
+ 
 #ifndef __cplusplus
 typedef void *HWND;
 typedef long  HRESULT;

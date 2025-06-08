@@ -163,6 +163,7 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
         },
         CREATE_WEBVIEW_MSG => {
             if (g_webview_environment == null) {
+
                 var hr = c.create_webview_environment(&g_webview_environment);
                 if (hr != S_OK) {
                     std.debug.print("WM_CREATE: create_webview_environment failed. HRESULT: 0x{X:0>8}\n", .{hr});
@@ -203,10 +204,14 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
         },
 
         win32.ui.windows_and_messaging.WM_DESTROY => {
+            std.debug.print("WM_DESTROY entered. g_webview_controller: {?}, g_webview_environment: {?}\n", .{ g_webview_controller, g_webview_environment });
             if (g_webview_controller != null and g_webview_environment != null) {
+                std.debug.print("WM_DESTROY: Condition met. Calling cleanup_webview with controller: {?} and environment: {?}\n", .{g_webview_controller.?, g_webview_environment.?});
                 c.cleanup_webview(g_webview_controller.?, g_webview_environment.?);
                 g_webview_controller = null;
                 g_webview_environment = null;
+            } else {
+                std.debug.print("WM_DESTROY: Condition NOT met. Skipping cleanup_webview. Controller was: {?}, Environment was: {?}\n", .{g_webview_controller, g_webview_environment});
             }
             win32.ui.windows_and_messaging.PostQuitMessage(0);
             return 0;

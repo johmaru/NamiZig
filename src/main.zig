@@ -11,6 +11,7 @@ pub fn main() !void {
 
         const webViewConttollerSettings = c.controllerSettings{
             .contextMenu = false,
+            .isVirtualHost = true,
         };
 
         var win_settings = settings.WindowSettings{

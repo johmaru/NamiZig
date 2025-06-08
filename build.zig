@@ -43,6 +43,7 @@ pub fn build(b: *std.Build) void {
     lib.addIncludePath(b.path("src"));
     lib.linkSystemLibrary("ole32");
     lib.linkSystemLibrary("oleaut32");
+    lib.linkSystemLibrary("shell32");
     lib.linkSystemLibrary("c");
     lib.addIncludePath(b.path("webview/include"));
     lib.addLibraryPath(b.path("webview/x64"));
@@ -93,7 +94,8 @@ pub fn build(b: *std.Build) void {
     exe.linkSystemLibrary("ole32");
     exe.linkSystemLibrary("oleaut32");
     exe.linkSystemLibrary("uuid");
-    exe.linkSystemLibrary("propsys"); 
+    exe.linkSystemLibrary("propsys");
+    exe.linkSystemLibrary("shell32");
     exe.linkLibrary(lib);
     exe.addObjectFile(b.path("webview/x64/WebView2Loader.dll.lib"));
 
