@@ -18,6 +18,7 @@
 #include <winuser.h> */
 #endif
   #include <windows.h>
+  #include <cwchar>
 
   #include <synchapi.h>
   #include <winbase.h>
@@ -250,16 +251,7 @@ HRESULT create_webview_controller(void* environment, HWND hwnd, void** controlle
                                 if (SUCCEEDED(hr) && webview11 != nullptr) {
                                     LPCWSTR hostName = L"assets.namizig.com";
 
-                                    WCHAR documentPath[MAX_PATH];
-                                    HRESULT hr_folder = SHGetFolderPathW(
-                                        NULL, 
-                                        CSIDL_PERSONAL,
-                                        NULL, 
-                                        0, 
-                                        documentPath
-                                    );
-
-                                    if (SUCCEEDED(hr_folder)) {
+                                    
 
                                         wchar_t* subFolder_wchar = nullptr;
                                         int wideCharLen = 0;
@@ -284,12 +276,34 @@ HRESULT create_webview_controller(void* environment, HWND hwnd, void** controlle
                                             }
                                        
                                         if (subFolder_wchar != nullptr) {
-                                            size_t docPathLen = wcslen(documentPath);
+                                            WCHAR* exeFullDir = new (std::nothrow) WCHAR[MAX_PATH];
+                                            if (exeFullDir == nullptr) {
+                                                OutputDebugStringA("Failed to allocate memory for exePath.\n");
+                                                delete[] subFolder_wchar;
+                                                return E_OUTOFMEMORY;
+                                            }
+                                            DWORD pathActualLen = GetModuleFileNameW(NULL, exeFullDir, MAX_PATH);
+                                            if (pathActualLen == 0 || (pathActualLen == MAX_PATH && GetLastError() == ERROR_INSUFFICIENT_BUFFER)) {
+                                                delete[] exeFullDir;
+                                                delete[] subFolder_wchar;
+                                                OutputDebugStringA("Failed to get module file name.\n");
+                                                return HRESULT_FROM_WIN32(GetLastError());
+                                            }
+                                            WCHAR* lastBackslash = ::wcsrchr(exeFullDir, L'\\');
+                                            if (lastBackslash != nullptr) {
+                                                *lastBackslash = L'\0';
+                                            } else {
+                                                delete[] exeFullDir;
+                                                delete[] subFolder_wchar;
+                                                OutputDebugStringA("Failed to find backslash in module file name.\n");
+                                                return E_FAIL;
+                                            }
                                             size_t subFolderLen = wcslen(subFolder_wchar);
-                                            size_t folderPathLen = docPathLen + 1 + subFolderLen + 1;
+                                            size_t exeDirOnlyLen = wcslen(exeFullDir);
+                                            size_t folderPathLen = exeDirOnlyLen + 1 + subFolderLen + 1;
                                             wchar_t* folderPath = new (std::nothrow) wchar_t[folderPathLen];
                                             if (folderPath != nullptr) {
-                                                swprintf_s(folderPath, folderPathLen, L"%s\\%s", documentPath, subFolder_wchar);
+                                                swprintf_s(folderPath, folderPathLen, L"%s\\%s", exeFullDir, subFolder_wchar);
 
                                                 wchar_t dbgMsg[MAX_PATH + 100];
                                                 swprintf_s(dbgMsg, _countof(dbgMsg), L"Attempting to create directory at: %s\n", folderPath);
@@ -326,13 +340,12 @@ HRESULT create_webview_controller(void* environment, HWND hwnd, void** controlle
                                             } else {
                                                 OutputDebugStringA("Failed to allocate memory for folder path.\n");
                                             }
-                                            delete[] subFolder_wchar;
+                                            delete[]exeFullDir;
                                         } else {
                                             char err_buffer[256];
-                                            sprintf_s(err_buffer, sizeof(err_buffer), "Failed to get Documents folder. HRESULT: 0x%lX\n", hr_folder);
                                             OutputDebugStringA(err_buffer);
                                         }
-                                    }
+                                    
                                 } else {
                                     char err_buffer[256];
                                     sprintf_s(err_buffer, sizeof(err_buffer), "ICoreWebView2_11 not supported. Virtual host feature unavailable. HRESULT: 0x%lX\n", hr);
