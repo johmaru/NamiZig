@@ -20,6 +20,7 @@ pub fn main() !void {
         var win_settings = settings.WindowSettings{
             .navigatge_to = "https://www.google.com",
             .webview_controller_settings = webViewConttollerSettings,
+            .toolbar = false,
         };
 
         try window_gen.init(&win_settings);

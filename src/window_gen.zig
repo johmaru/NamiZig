@@ -10,6 +10,9 @@ const S_OK: c.HRESULT = 0;
 var g_webview_environment: ?*anyopaque = null;
 var g_webview_controller: ?*anyopaque = null;
 var g_settings: *setting.WindowSettings = undefined;
+var g_hToolbar: ?win32.foundation.HWND = null;
+
+const ID_TOOLBAR: u32 = 1001;
 
 pub fn init(settings: *setting.WindowSettings) !void {
     const os_tag = builtin.os.tag;
@@ -33,6 +36,17 @@ fn win32_init(settings: *setting.WindowSettings) !void {
 
     const WNDCLASSW = win32.ui.windows_and_messaging.WNDCLASSW;
     const MSG = win32.ui.windows_and_messaging.MSG;
+    const INITCOMMONCONTROLSEX = win32.ui.controls.INITCOMMONCONTROLSEX;
+
+    if (settings.toolbar) {
+        var icex = INITCOMMONCONTROLSEX{
+        .dwSize = @sizeOf(INITCOMMONCONTROLSEX),
+        .dwICC = win32.ui.controls.ICC_BAR_CLASSES,
+        };
+        if (win32.ui.controls.InitCommonControlsEx(&icex) == 0) {
+            return error.CommonControlsInitFailed;   
+        }
+    }
 
     init_navigate_to = settings.navigatge_to;
 
@@ -146,20 +160,87 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                 var client_rect: win32.foundation.RECT = undefined;
                 _ = win32.ui.windows_and_messaging.GetClientRect(hwnd, &client_rect);
 
+                var toolbar_height: i32 = 0;
+                if (g_hToolbar) |hToobar| {
+                    if (win32.ui.windows_and_messaging.IsWindowVisible(hToobar) != 0) {
+                        var toolbar_rect: win32.foundation.RECT = undefined;
+                        if (win32.ui.windows_and_messaging.GetWindowRect(hToobar, &toolbar_rect) != 0) {
+                            toolbar_height = toolbar_rect.bottom - toolbar_rect.top;
+                        }
+                    }
+                }
+
                 const c_rect = c.RECT{
                     .left = client_rect.left,
-                    .top = client_rect.top,
+                    .top = client_rect.top + toolbar_height,
                     .right = client_rect.right,
                     .bottom = client_rect.bottom,
                 };
-                c.resize_webview(controller, c_rect);
+                if (c_rect.bottom > c_rect.top and c_rect.right > c_rect.left) {
+                    c.resize_webview(controller, c_rect);
+                }
             }
+
+            if (g_hToolbar) |hToolbar| {
+                _ = win32.ui.windows_and_messaging.SendMessageW(
+                    hToolbar,
+                    win32.ui.controls.TB_AUTOSIZE,
+                    0,
+                    0,
+                );
+            }
+
             return 0;
         },
         win32.ui.windows_and_messaging.WM_CREATE => {
-            
-            _ = win32.ui.windows_and_messaging.PostMessageW(hwnd, CREATE_WEBVIEW_MSG, 0, 0);
-            return 0;
+
+            // Create a toolbar if it doesn't exist
+            const hInstance = win32.system.library_loader.GetModuleHandleW(null);
+            if (hInstance == null) {
+                std.debug.print("WM_CREATE: GetModuleHandleW failed.\n", .{});
+                return -1;
+            }
+
+            if (g_settings.toolbar) {
+                const toolbar_class_name_u8_fixed_array_ptr: *const [15:0]u8 = win32.ui.controls.TOOLBARCLASSNAMEW;
+
+                const toolbar_class_name_u8_c_ptr: [*c]const u8 = @ptrCast(toolbar_class_name_u8_fixed_array_ptr);
+
+                const toolbar_class_name_u8_slice: [:0]const u8 = std.mem.sliceTo(toolbar_class_name_u8_c_ptr, 0);
+
+                const toolbar_class_name_utf16_z = std.unicode.utf8ToUtf16LeAllocZ(
+       std.heap.page_allocator,
+            toolbar_class_name_u8_slice,
+                    ) catch |err| {
+                        std.debug.print("WM_CREATE: utf8ToUtf16LeAllocZ for toolbar class name failed: {any}\n", .{err});
+                        return -1;
+                    };
+
+                defer std.heap.page_allocator.free(std.mem.sliceAsBytes(toolbar_class_name_utf16_z.ptr[0..toolbar_class_name_utf16_z.len]));
+
+                g_hToolbar = win32.ui.windows_and_messaging.CreateWindowExW(
+                win32.ui.windows_and_messaging.WINDOW_EX_STYLE{},
+                    toolbar_class_name_utf16_z.ptr,
+                    null,
+                    win32.ui.windows_and_messaging.WINDOW_STYLE{
+                        .CHILD = 1,
+                        .VISIBLE = 1,
+                    },
+                    0, 0, 0, 0,
+                    hwnd,
+                    @ptrFromInt(ID_TOOLBAR),
+                    hInstance,
+                    null,
+                );
+
+                if (g_hToolbar == null) {
+                    std.debug.print("WM_CREATE: CreateWindowExW for toolbar failed.\n", .{});
+                    return -1;
+                }
+                }
+                
+                _ = win32.ui.windows_and_messaging.PostMessageW(hwnd, CREATE_WEBVIEW_MSG, 0, 0);
+                return 0;
         },
         CREATE_WEBVIEW_MSG => {
             if (g_webview_environment == null) {
@@ -186,13 +267,24 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
 
                 var client_rect: win32.foundation.RECT = undefined;
                 _ = win32.ui.windows_and_messaging.GetClientRect(hwnd, &client_rect);
+
+                var toolbar_height: i32 = 0;
+                if (g_hToolbar) |hToolbar| {
+                   var toolbar_rect: win32.foundation.RECT = undefined;
+                    if (win32.ui.windows_and_messaging.GetWindowRect(hToolbar, &toolbar_rect) != 0) {
+                        toolbar_height = toolbar_rect.bottom - toolbar_rect.top;
+                    }
+                }
+
                 const init_rect = c.RECT{
                     .left   = client_rect.left,
-                    .top    = client_rect.top,
+                    .top    = client_rect.top + toolbar_height,
                     .right  = client_rect.right,
                     .bottom = client_rect.bottom,
                 };
-                c.resize_webview(g_webview_controller.?, init_rect);
+                if (init_rect.bottom > init_rect.top and init_rect.right > init_rect.left) {
+                   c.resize_webview(g_webview_controller.?, init_rect);
+                }
 
                 if (init_navigate_to == null) {
                     std.debug.print("WIP Feature", .{});
