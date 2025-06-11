@@ -1,3 +1,8 @@
+# GUI on ZIG Library
+
+This Library is easy development with html and zig for knownledge.
+So now only supported windows x64 msvc environment.
+
 # Needed tools to compile
 
 (now only support windows x64)

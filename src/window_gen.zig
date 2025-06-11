@@ -11,8 +11,11 @@ var g_webview_environment: ?*anyopaque = null;
 var g_webview_controller: ?*anyopaque = null;
 var g_settings: *setting.WindowSettings = undefined;
 var g_hToolbar: ?win32.foundation.HWND = null;
+var g_hMenuFile: ?win32.ui.windows_and_messaging.HMENU = null;
 
 const ID_TOOLBAR: u32 = 1001;
+const ID_FILE_BUTTON: u32 = 1002;
+const ID_FILE_EXIT: u32 = 1003;
 
 pub fn init(settings: *setting.WindowSettings) !void {
     const os_tag = builtin.os.tag;
@@ -37,11 +40,17 @@ fn win32_init(settings: *setting.WindowSettings) !void {
     const WNDCLASSW = win32.ui.windows_and_messaging.WNDCLASSW;
     const MSG = win32.ui.windows_and_messaging.MSG;
     const INITCOMMONCONTROLSEX = win32.ui.controls.INITCOMMONCONTROLSEX;
+    const INITCOMMONCONTROLSEX_ICC = win32.ui.controls.INITCOMMONCONTROLSEX_ICC;
 
     if (settings.toolbar) {
+        const icc_flags = INITCOMMONCONTROLSEX_ICC {
+            .BAR_CLASSES = 1,
+            .COOL_CLASSES = 1,
+        };
+
         var icex = INITCOMMONCONTROLSEX{
         .dwSize = @sizeOf(INITCOMMONCONTROLSEX),
-        .dwICC = win32.ui.controls.ICC_BAR_CLASSES,
+        .dwICC = @bitCast(icc_flags),
         };
         if (win32.ui.controls.InitCommonControlsEx(&icex) == 0) {
             return error.CommonControlsInitFailed;   
@@ -209,8 +218,8 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                 const toolbar_class_name_u8_slice: [:0]const u8 = std.mem.sliceTo(toolbar_class_name_u8_c_ptr, 0);
 
                 const toolbar_class_name_utf16_z = std.unicode.utf8ToUtf16LeAllocZ(
-       std.heap.page_allocator,
-            toolbar_class_name_u8_slice,
+                    std.heap.page_allocator,
+                    toolbar_class_name_u8_slice,
                     ) catch |err| {
                         std.debug.print("WM_CREATE: utf8ToUtf16LeAllocZ for toolbar class name failed: {any}\n", .{err});
                         return -1;
@@ -222,10 +231,12 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                 win32.ui.windows_and_messaging.WINDOW_EX_STYLE{},
                     toolbar_class_name_utf16_z.ptr,
                     null,
-                    win32.ui.windows_and_messaging.WINDOW_STYLE{
-                        .CHILD = 1,
-                        .VISIBLE = 1,
-                    },
+                    @bitCast(
+                        @as(u32, @bitCast(win32.ui.windows_and_messaging.WINDOW_STYLE{
+                            .CHILD = 1,
+                            .VISIBLE = 1,
+                        })) | win32.ui.controls.TBSTYLE_FLAT | win32.ui.controls.TBSTYLE_TOOLTIPS
+                    ),
                     0, 0, 0, 0,
                     hwnd,
                     @ptrFromInt(ID_TOOLBAR),
@@ -237,7 +248,59 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                     std.debug.print("WM_CREATE: CreateWindowExW for toolbar failed.\n", .{});
                     return -1;
                 }
+
+                _ =win32.ui.windows_and_messaging.SendMessageW(g_hToolbar.?, win32.ui.controls.TB_BUTTONSTRUCTSIZE, @sizeOf(win32.ui.controls.TBBUTTON), 0);
+
+                const file_button_text_utf16 = std.unicode.utf8ToUtf16LeAllocZ(std.heap.page_allocator, "File") catch |err| {
+                    std.debug.print("WM_CREATE: utf8ToUtf16LeAllocZ for file_button_text_utf16 failed: {any}\n", .{err});
+                    return -1;
+                };
+                defer std.heap.page_allocator.free(std.mem.sliceAsBytes(file_button_text_utf16.ptr[0..file_button_text_utf16.len]));
+
+                var tbButtonFile = win32.ui.controls.TBBUTTON{
+                    .iBitmap = win32.ui.controls.I_IMAGENONE,
+                    .idCommand = ID_FILE_BUTTON,
+                    .fsState = win32.ui.controls.TBSTATE_ENABLED,
+                    .fsStyle = win32.ui.controls.BTNS_DROPDOWN | win32.ui.controls.BTNS_AUTOSIZE | win32.ui.controls.BTNS_WHOLEDROPDOWN,
+                    .bReserved = [_]u8{0} ** 6,
+                    .dwData = 0,
+                    .iString = @intCast(@intFromPtr(file_button_text_utf16.ptr)),
+                };
+
+                _ = win32.ui.windows_and_messaging.SendMessageW(
+                    g_hToolbar.?,
+                    win32.ui.controls.TB_ADDBUTTONS,
+                    1,
+                    @intCast(@intFromPtr(&tbButtonFile)),
+                );
+
+                g_hMenuFile = win32.ui.windows_and_messaging.CreatePopupMenu();
+                if (g_hMenuFile == null) {
+                    std.debug.print("WM_CREATE: CreatePopupMenu for file menu failed.\n", .{});
+                    return -1;
                 }
+
+                const exit_menu_text_utf16 = std.unicode.utf8ToUtf16LeAllocZ(std.heap.page_allocator, "Exit") catch |err| {
+                    std.debug.print("WM_CREATE: utf8ToUtf16LeAllocZ for exit_menu_text_utf16 failed: {any}\n", .{err});
+                    _ = win32.ui.windows_and_messaging.DestroyMenu(g_hMenuFile.?);
+                    g_hMenuFile = null;
+                    return -1;
+                };  
+                defer std.heap.page_allocator.free(std.mem.sliceAsBytes(exit_menu_text_utf16.ptr[0..exit_menu_text_utf16.len]));
+
+                if (win32.ui.windows_and_messaging.AppendMenuW(
+                    g_hMenuFile.?,
+                    win32.ui.windows_and_messaging.MF_STRING,
+                    ID_FILE_EXIT,
+                    exit_menu_text_utf16.ptr,
+                ) == 0) {
+                    std.debug.print("WM_CREATE: AppendMenuW for exit menu item failed.\n", .{});
+                    _ = win32.ui.windows_and_messaging.DestroyMenu(g_hMenuFile.?);
+                    g_hMenuFile = null;
+                    return -1;
+
+                }
+            }
                 
                 _ = win32.ui.windows_and_messaging.PostMessageW(hwnd, CREATE_WEBVIEW_MSG, 0, 0);
                 return 0;
@@ -310,8 +373,60 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
             } else {
                 std.debug.print("WM_DESTROY: Condition NOT met. Skipping cleanup_webview. Controller was: {?}, Environment was: {?}\n", .{g_webview_controller, g_webview_environment});
             }
+            if (g_hMenuFile) |hMenu| {
+                _ = win32.ui.windows_and_messaging.DestroyMenu(hMenu);
+                g_hMenuFile = null;
+            }
             win32.ui.windows_and_messaging.PostQuitMessage(0);
             return 0;
+        },
+        win32.ui.windows_and_messaging.WM_NOTIFY => {
+            const pnmh: *win32.ui.controls.NMHDR = @ptrFromInt(@as(usize, @bitCast(lParam)));
+            if (pnmh.hwndFrom == g_hToolbar.?) {
+                if (pnmh.code == c.WRAPPER_TBN_DROPDOWN) {
+                    const pnmtb: *win32.ui.controls.NMTOOLBARW = @ptrCast(@alignCast(pnmh));
+                    if (pnmtb.iItem == ID_FILE_BUTTON) {
+                        if (g_hMenuFile) |hMenuFile| {
+                            var rc: win32.foundation.RECT = undefined;
+                            _ = win32.ui.windows_and_messaging.SendMessageW(g_hToolbar.?, win32.ui.controls.TB_GETRECT, ID_FILE_BUTTON, @intCast(@intFromPtr(&rc)));
+
+                            var pt: win32.foundation.POINT = undefined;
+                            pt.x = rc.left;
+                            pt.y = rc.bottom;
+                            _ = win32.graphics.gdi.ClientToScreen(g_hToolbar.?, &pt);
+
+                            _ = win32.ui.windows_and_messaging.TrackPopupMenu(
+                                hMenuFile,
+                                win32.ui.windows_and_messaging.TRACK_POPUP_MENU_FLAGS{
+                                    .RIGHTALIGN = 0,
+                                    .BOTTOMALIGN = 0,
+                                },
+                                pt.x,
+                                pt.y,
+                                0,
+                                hwnd,
+                                null,
+                            );
+                            return 0;
+                        }
+                    }
+        } else {
+            std.debug.print("WM_NOTIFY: Unhandled notification code: {}\n", .{pnmh.code});
+        }
+            }
+            return win32.ui.windows_and_messaging.DefWindowProcW(hwnd, msg, wParam, lParam);
+        },
+        win32.ui.windows_and_messaging.WM_COMMAND => {
+            const wmId = win32.zig.loword(wParam);
+            switch (wmId) {
+                ID_FILE_EXIT => {
+                    _ = win32.ui.windows_and_messaging.DestroyWindow(hwnd);
+                    return 0;
+                },
+                else => {
+                    return win32.ui.windows_and_messaging.DefWindowProcW(hwnd, msg, wParam, lParam);
+                },
+            }
         },
         else => {
             return win32.ui.windows_and_messaging.DefWindowProcW(hwnd, msg, wParam, lParam);

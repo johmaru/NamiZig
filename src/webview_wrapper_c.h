@@ -35,6 +35,8 @@ HRESULT navigate_webview          (void *controller,  const char *url);
 void    resize_webview            (void *controller,  RECT bounds);
 void     cleanup_webview           (void *controller,  void *environment);
 
+extern const unsigned int WRAPPER_TBN_DROPDOWN;
+
 #ifdef __cplusplus
 }
 #endif

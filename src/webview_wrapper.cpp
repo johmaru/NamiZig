@@ -18,6 +18,7 @@
 #include <winuser.h> */
 #endif
   #include <windows.h>
+  #include <commctrl.h>
   #include <cwchar>
 
   #include <synchapi.h>
@@ -66,6 +67,8 @@ extern "C" {
     HRESULT navigate_webview(void* controller_in, const char* url_utf8);
     void resize_webview(void* controller_in, RECT bounds);
     void cleanup_webview(void* controller, void* environment);
+
+    const unsigned int WRAPPER_TBN_DROPDOWN = TBN_DROPDOWN;
 }
 
 HRESULT create_webview_environment(void** environment) {
