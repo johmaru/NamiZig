@@ -20,6 +20,11 @@ pub fn main() !void {
         var win_settings = settings.WindowSettings{
             .navigatge_to = "https://www.google.com",
             .webview_controller_settings = webViewConttollerSettings,
+            .theme_settings = settings.ThemeSettings{
+                .toolbar_background_color = 0x00222222,
+                .toolbar_button_color = 0x00555555,
+                .toolbar_button_text_color = 0x00FFFFFF,
+            }
         };
 
         try window_gen.init(&win_settings);

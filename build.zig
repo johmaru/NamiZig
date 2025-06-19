@@ -53,14 +53,14 @@ pub fn build(b: *std.Build) void {
     lib.addSystemIncludePath(.{ .cwd_relative = "C:/Program Files (x86)/Windows Kits/10/Include/10.0.22621.0/shared" });
     lib.addSystemIncludePath(.{ .cwd_relative = "C:/Program Files (x86)/Windows Kits/10/Include/10.0.22621.0/cppwinrt" });
 
-    lib.addSystemIncludePath(.{ .cwd_relative = "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.43.34808/include" });
+    lib.addSystemIncludePath(.{ .cwd_relative = "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/include" });
     lib.addSystemIncludePath(.{ .cwd_relative = "C:/Program Files (x86)/Windows Kits/10/Include/10.0.22621.0/ucrt" });
 
     lib.root_module.addImport("win32", win32_mod);
 
     lib.addCSourceFile(.{
         .file  = .{ .cwd_relative = "src/webview_wrapper.cpp" },
-        .flags = &.{ "-std=c++17", "-Wno-unused-command-line-argument"},
+        .flags = &.{ "-std=c++20", "-Wno-unused-command-line-argument"},
     });
 
     // This creates another `std.Build.Step.Compile`, but this one builds an executable
@@ -74,7 +74,7 @@ pub fn build(b: *std.Build) void {
 
     exe.verbose_cc = true;
 
-    exe.addSystemIncludePath(.{ .cwd_relative = "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.43.34808/include" });
+    exe.addSystemIncludePath(.{ .cwd_relative = "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/include" });
     exe.addSystemIncludePath(.{ .cwd_relative = "C:/Program Files (x86)/Windows Kits/10/Include/10.0.22621.0/um" });
     exe.addSystemIncludePath(.{ .cwd_relative = "C:/Program Files (x86)/Windows Kits/10/Include/10.0.22621.0/winrt" });
     exe.addSystemIncludePath(.{ .cwd_relative = "C:/Program Files (x86)/Windows Kits/10/Include/10.0.22621.0/shared" });
@@ -85,7 +85,7 @@ pub fn build(b: *std.Build) void {
     exe.addIncludePath(b.path("webview/include"));
     exe.addIncludePath(b.path("wil/include/wil"));
 
-    exe.addLibraryPath(.{ .cwd_relative = "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.43.34808/lib/x64" });
+    exe.addLibraryPath(.{ .cwd_relative = "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/lib/x64" });
     exe.addLibraryPath(.{ .cwd_relative = "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.22621.0/um/x64" });
     exe.addLibraryPath(.{ .cwd_relative = "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.22621.0/ucrt/x64" });
     

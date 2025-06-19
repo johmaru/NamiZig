@@ -12,6 +12,7 @@ pub const WindowSettings = struct {
     navigatge_to: ?[:0] const u8 = null,
     VirtualHostName: [:0] const u8 = "NamiZig",
     toolbar: bool = true,
+    theme_settings: ThemeSettings = ThemeSettings{},
     start_position: WindowStartPostionSettings = WindowStartPostionSettings{},
     window_style: win32.ui.windows_and_messaging.WINDOW_STYLE = win32.ui.windows_and_messaging.WS_OVERLAPPEDWINDOW,
     wnd_class_settings: WndClassSettings = WndClassSettings{},
@@ -37,4 +38,13 @@ pub const CreateWindowSettings = struct {
     dwExStyle: win32.ui.windows_and_messaging.WINDOW_EX_STYLE = win32.ui.windows_and_messaging.WS_EX_APPWINDOW,
     hWndParent: ?win32.foundation.HWND  = null,
     hMenu: ?win32.ui.windows_and_messaging.HMENU = null,
+};
+
+pub const ThemeSettings = struct {
+    accent_color: u32 = 0x00D1B499,
+    toolbar_background_color: u32 = 0x00F0F0F0,
+    toolbar_text_color: u32 = 0x00000000,
+    toolbar_button_color: u32 = 0x00F0F0F0,
+    toolbar_button_text_color: u32 = 0x00000000,
+    window_background_color: u32 = 0x00FFFFFF,
 };

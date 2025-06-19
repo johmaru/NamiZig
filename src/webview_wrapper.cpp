@@ -35,6 +35,7 @@
   #include <wrl/client.h>
   #include <wrl/event.h>
   #include <shlobj.h>
+  #include <Uxtheme.h>
 #else
   #include <stddef.h>
   #include <stdint.h>
@@ -53,6 +54,7 @@
 #include <WebView2EnvironmentOptions.h>
 #include <WebView2.h>
 
+#define WEBVIEW_WRAPPER_EXPORTS
 #include "webview_wrapper_c.h"
 
 
@@ -68,7 +70,16 @@ extern "C" {
     void resize_webview(void* controller_in, RECT bounds);
     void cleanup_webview(void* controller, void* environment);
 
+    HRESULT __stdcall wrapper_SetWindowTheme(HWND hwnd, const wchar_t *pszSubAppName, const wchar_t *pszSubIdList);
+
     const unsigned int WRAPPER_TBN_DROPDOWN = TBN_DROPDOWN;
+    const unsigned int WRAPPER_NM_CUSTOMDRAW = NM_CUSTOMDRAW;
+}
+
+#pragma comment(lib, "uxtheme.lib")
+HRESULT __stdcall wrapper_SetWindowTheme(HWND hwnd, const wchar_t *pszSubAppName, const wchar_t *pszSubIdList) {
+    if (hwnd == nullptr) return E_POINTER;
+    return SetWindowTheme(hwnd, pszSubAppName, pszSubIdList);
 }
 
 HRESULT create_webview_environment(void** environment) {

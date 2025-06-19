@@ -226,23 +226,28 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                     };
 
                 defer std.heap.page_allocator.free(std.mem.sliceAsBytes(toolbar_class_name_utf16_z.ptr[0..toolbar_class_name_utf16_z.len]));
+                
+                const style_bits: u32 =
+                    win32.ui.controls.TBSTYLE_FLAT |
+                    win32.ui.controls.TBSTYLE_TOOLTIPS |
+                    @as(u32, @bitCast(win32.ui.windows_and_messaging.WS_CHILD)) |
+                    @as(u32, @bitCast(win32.ui.windows_and_messaging.WS_VISIBLE));
+                
+               
 
-                g_hToolbar = win32.ui.windows_and_messaging.CreateWindowExW(
-                win32.ui.windows_and_messaging.WINDOW_EX_STYLE{},
-                    toolbar_class_name_utf16_z.ptr,
-                    null,
-                    @bitCast(
-                        @as(u32, @bitCast(win32.ui.windows_and_messaging.WINDOW_STYLE{
-                            .CHILD = 1,
-                            .VISIBLE = 1,
-                        })) | win32.ui.controls.TBSTYLE_FLAT | win32.ui.controls.TBSTYLE_TOOLTIPS
-                    ),
-                    0, 0, 0, 0,
+                g_hToolbar = win32.ui.controls.CreateToolbarEx(
                     hwnd,
-                    @ptrFromInt(ID_TOOLBAR),
-                    hInstance,
-                    null,
+                    style_bits,
+                    ID_TOOLBAR,
+                    0,
+                    null,0,
+                    null,0,
+                    16,16,16,16,
+                    @sizeOf(win32.ui.controls.TBBUTTON)
                 );
+
+                const empty_theme: [:0]const u16 = &[_:0]u16{0};
+                _ = c.wrapper_SetWindowTheme(g_hToolbar.?, empty_theme.ptr, empty_theme.ptr);
 
                 if (g_hToolbar == null) {
                     std.debug.print("WM_CREATE: CreateWindowExW for toolbar failed.\n", .{});
@@ -383,6 +388,28 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
         win32.ui.windows_and_messaging.WM_NOTIFY => {
             const pnmh: *win32.ui.controls.NMHDR = @ptrFromInt(@as(usize, @bitCast(lParam)));
             if (pnmh.hwndFrom == g_hToolbar.?) {
+
+                if (pnmh.code == c.WRAPPER_NM_CUSTOMDRAW) {
+                    const pcd: *win32.ui.controls.NMTBCUSTOMDRAW = @ptrCast(pnmh);
+                    switch (pcd.nmcd.dwDrawStage) {
+                        win32.ui.controls.CDDS_PREPAINT => {
+                            const hBrush = win32.graphics.gdi.CreateSolidBrush(g_settings.theme_settings.toolbar_background_color);
+                            if (hBrush != null) {
+                                _ = win32.graphics.gdi.FillRect(pcd.nmcd.hdc, &pcd.nmcd.rc, hBrush);
+                                _ = win32.graphics.gdi.DeleteObject(hBrush);
+                            }
+                            return win32.ui.controls.CDRF_NOTIFYITEMDRAW;
+                        },
+                        win32.ui.controls.CDDS_ITEMPREPAINT => {
+                            pcd.clrText = g_settings.theme_settings.toolbar_button_text_color;
+                            pcd.clrBtnFace = g_settings.theme_settings.toolbar_button_color;
+                            return win32.ui.controls.CDRF_NEWFONT;
+                        },
+                        else => {}
+                    }
+                    return win32.ui.controls.CDRF_DODEFAULT;
+                }
+
                 if (pnmh.code == c.WRAPPER_TBN_DROPDOWN) {
                     const pnmtb: *win32.ui.controls.NMTOOLBARW = @ptrCast(@alignCast(pnmh));
                     if (pnmtb.iItem == ID_FILE_BUTTON) {
