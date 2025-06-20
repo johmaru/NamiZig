@@ -5,13 +5,38 @@ const c = @cImport({
     @cInclude("webview_wrapper_c.h");
 });
 
+const MEASUREITEMSSTRUCT = extern struct {
+    CtlType: u32,
+    CtlID: u32,
+    itemID: u32,
+    itemWidth: i32,
+    itemHeight: i32,
+    itemData: usize,
+};
+
+const DRAWITEMSTRUCT = extern struct {
+    CtlType: u32,
+    CtlID: u32,
+    itemID: u32,
+    itemAction: u32,
+    itemState: u32,
+    hwndItem: ?win32.foundation.HWND,
+    hDC: ?win32.graphics.gdi.HDC,
+    rcItem: win32.foundation.RECT,
+    itemData: usize,
+};
+
 const S_OK: c.HRESULT = 0;
+const ODT_MENU: u32 = 1;
 
 var g_webview_environment: ?*anyopaque = null;
 var g_webview_controller: ?*anyopaque = null;
 var g_settings: *setting.WindowSettings = undefined;
 var g_hToolbar: ?win32.foundation.HWND = null;
 var g_hMenuFile: ?win32.ui.windows_and_messaging.HMENU = null;
+
+// global text definitions
+var g_text_file_button: [:0]const u16 = undefined;
 
 const ID_TOOLBAR: u32 = 1001;
 const ID_FILE_BUTTON: u32 = 1002;
@@ -260,7 +285,8 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                     std.debug.print("WM_CREATE: utf8ToUtf16LeAllocZ for file_button_text_utf16 failed: {any}\n", .{err});
                     return -1;
                 };
-                defer std.heap.page_allocator.free(std.mem.sliceAsBytes(file_button_text_utf16.ptr[0..file_button_text_utf16.len]));
+
+                g_text_file_button = file_button_text_utf16;
 
                 var tbButtonFile = win32.ui.controls.TBBUTTON{
                     .iBitmap = win32.ui.controls.I_IMAGENONE,
@@ -291,11 +317,10 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                     g_hMenuFile = null;
                     return -1;
                 };  
-                defer std.heap.page_allocator.free(std.mem.sliceAsBytes(exit_menu_text_utf16.ptr[0..exit_menu_text_utf16.len]));
 
                 if (win32.ui.windows_and_messaging.AppendMenuW(
                     g_hMenuFile.?,
-                    win32.ui.windows_and_messaging.MF_STRING,
+                    win32.ui.windows_and_messaging.MF_OWNERDRAW,
                     ID_FILE_EXIT,
                     exit_menu_text_utf16.ptr,
                 ) == 0) {
@@ -309,6 +334,56 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                 
                 _ = win32.ui.windows_and_messaging.PostMessageW(hwnd, CREATE_WEBVIEW_MSG, 0, 0);
                 return 0;
+        },
+        win32.ui.windows_and_messaging.WM_MEASUREITEM => {
+            const pMesureItem: *MEASUREITEMSSTRUCT = @ptrFromInt(@as(usize, @bitCast(lParam)));
+            if (pMesureItem.CtlType == ODT_MENU) {
+                pMesureItem.itemWidth = 120;
+                pMesureItem.itemHeight = 24;
+                return 1;
+            }
+            return win32.ui.windows_and_messaging.DefWindowProcW(hwnd, msg, wParam, lParam);
+        },
+        win32.ui.windows_and_messaging.WM_DRAWITEM => {
+            const pDrawItem: *DRAWITEMSTRUCT = @ptrFromInt(@as(usize, @bitCast(lParam)));
+
+            if ( pDrawItem.CtlType == ODT_MENU) {
+                const bgColor = if((pDrawItem.itemState & win32.ui.windows_and_messaging.ODS_SELECTED) != 0)
+                    g_settings.theme_settings.toolbar_button_color
+                else
+                    g_settings.theme_settings.toolbar_background_color;
+
+                const hBrush = win32.graphics.gdi.CreateSolidBrush(bgColor);
+                if (hBrush != null) {
+                    _ = win32.graphics.gdi.FillRect(pDrawItem.hDC, &pDrawItem.rcItem, hBrush);
+                    _ = win32.graphics.gdi.DeleteObject(hBrush);
+                }
+
+                _ = win32.graphics.gdi.SetTextColor(pDrawItem.hDC, g_settings.theme_settings.toolbar_button_text_color);
+                _ = win32.graphics.gdi.SetBkMode(pDrawItem.hDC, win32.graphics.gdi.TRANSPARENT);
+
+                const text_u8 = switch (pDrawItem.itemID) {
+                    ID_FILE_EXIT => "Exit",
+                    else => return win32.ui.windows_and_messaging.DefWindowProcW(hwnd, msg, wParam, lParam),
+                };
+                
+                const text_alloc = std.heap.page_allocator;
+                const text_utf16_z = std.unicode.utf8ToUtf16LeAllocZ(text_alloc, text_u8) catch |err| {
+                    std.debug.print("WM_DRAWITEM: utf8ToUtf16LeAllocZ failed: {any}\n", .{err});
+                    return win32.ui.windows_and_messaging.DefWindowProcW(hwnd, msg, wParam, lParam);
+                };
+                var text_rect = pDrawItem.rcItem;
+                _ = win32.graphics.gdi.DrawTextW(
+                    pDrawItem.hDC, 
+                    text_utf16_z.ptr, 
+                    -1, 
+                    &text_rect, 
+                    win32.graphics.gdi.DRAW_TEXT_FORMAT{.CENTER = 1, .VCENTER = 1, .SINGLELINE = 1},);
+                return 1;
+            } else {
+                std.debug.print("WM_DRAWITEM: Unhandled CtlType: {}\n", .{pDrawItem.CtlType});
+                return win32.ui.windows_and_messaging.DefWindowProcW(hwnd, msg, wParam, lParam);
+            }
         },
         CREATE_WEBVIEW_MSG => {
             if (g_webview_environment == null) {
@@ -382,6 +457,7 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                 _ = win32.ui.windows_and_messaging.DestroyMenu(hMenu);
                 g_hMenuFile = null;
             }
+            std.heap.page_allocator.free(g_text_file_button);
             win32.ui.windows_and_messaging.PostQuitMessage(0);
             return 0;
         },
