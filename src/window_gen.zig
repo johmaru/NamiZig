@@ -4,6 +4,7 @@ const setting = @import("setting.zig");
 const c = @cImport({
     @cInclude("webview_wrapper_c.h");
 });
+const lang = @import("lang.zig");
 
 const MEASUREITEMSSTRUCT = extern struct {
     CtlType: u32,
@@ -34,6 +35,7 @@ var g_webview_controller: ?*anyopaque = null;
 var g_settings: *setting.WindowSettings = undefined;
 var g_hToolbar: ?win32.foundation.HWND = null;
 var g_hMenuFile: ?win32.ui.windows_and_messaging.HMENU = null;
+var g_language_strings: lang.language_controller = undefined;
 
 // global text definitions
 var g_text_file_button: [:0]const u16 = undefined;
@@ -48,6 +50,10 @@ pub fn init(settings: *setting.WindowSettings) !void {
     switch (os_tag) {
         .windows => {
             g_settings = settings;
+            g_language_strings = try lang.language_controller.init(
+                std.heap.page_allocator,
+                settings.language,
+            );
             try win32_init(settings);
         },
         .linux => {
@@ -281,7 +287,7 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
 
                 _ =win32.ui.windows_and_messaging.SendMessageW(g_hToolbar.?, win32.ui.controls.TB_BUTTONSTRUCTSIZE, @sizeOf(win32.ui.controls.TBBUTTON), 0);
 
-                const file_button_text_utf16 = std.unicode.utf8ToUtf16LeAllocZ(std.heap.page_allocator, "File") catch |err| {
+                const file_button_text_utf16 = std.unicode.utf8ToUtf16LeAllocZ(std.heap.page_allocator, g_language_strings.getLanguageString(.file)) catch |err| {
                     std.debug.print("WM_CREATE: utf8ToUtf16LeAllocZ for file_button_text_utf16 failed: {any}\n", .{err});
                     return -1;
                 };
@@ -311,7 +317,7 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                     return -1;
                 }
 
-                const exit_menu_text_utf16 = std.unicode.utf8ToUtf16LeAllocZ(std.heap.page_allocator, "Exit") catch |err| {
+                const exit_menu_text_utf16 = std.unicode.utf8ToUtf16LeAllocZ(std.heap.page_allocator, g_language_strings.getLanguageString(.exit)) catch |err| {
                     std.debug.print("WM_CREATE: utf8ToUtf16LeAllocZ for exit_menu_text_utf16 failed: {any}\n", .{err});
                     _ = win32.ui.windows_and_messaging.DestroyMenu(g_hMenuFile.?);
                     g_hMenuFile = null;
@@ -363,7 +369,7 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                 _ = win32.graphics.gdi.SetBkMode(pDrawItem.hDC, win32.graphics.gdi.TRANSPARENT);
 
                 const text_u8 = switch (pDrawItem.itemID) {
-                    ID_FILE_EXIT => "Exit",
+                    ID_FILE_EXIT => g_language_strings.getLanguageString(.exit),
                     else => return win32.ui.windows_and_messaging.DefWindowProcW(hwnd, msg, wParam, lParam),
                 };
                 
@@ -445,6 +451,8 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
 
         win32.ui.windows_and_messaging.WM_DESTROY => {
             std.debug.print("WM_DESTROY entered. g_webview_controller: {?}, g_webview_environment: {?}\n", .{ g_webview_controller, g_webview_environment });
+           
+            // cleanup webview if it exists
             if (g_webview_controller != null and g_webview_environment != null) {
                 std.debug.print("WM_DESTROY: Condition met. Calling cleanup_webview with controller: {?} and environment: {?}\n", .{g_webview_controller.?, g_webview_environment.?});
                 c.cleanup_webview(g_webview_controller.?, g_webview_environment.?);
@@ -453,11 +461,19 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
             } else {
                 std.debug.print("WM_DESTROY: Condition NOT met. Skipping cleanup_webview. Controller was: {?}, Environment was: {?}\n", .{g_webview_controller, g_webview_environment});
             }
+
+            // cleanup toolbar if it exists
             if (g_hMenuFile) |hMenu| {
                 _ = win32.ui.windows_and_messaging.DestroyMenu(hMenu);
                 g_hMenuFile = null;
             }
+
+            // cleanup toolbar text
             std.heap.page_allocator.free(g_text_file_button);
+
+            // cleanup language controller
+            g_language_strings.deinit();
+
             win32.ui.windows_and_messaging.PostQuitMessage(0);
             return 0;
         },

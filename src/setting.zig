@@ -3,6 +3,7 @@ const c = @cImport({
     @cInclude("webview_wrapper_c.h");
 });
 const win32 = @import("win32");
+const lang = @import("lang.zig");
 pub const WindowSettings = struct {
     title: []const u8 = "NamiZig Application",
     width: u32 = 800,
@@ -13,6 +14,7 @@ pub const WindowSettings = struct {
     VirtualHostName: [:0] const u8 = "NamiZig",
     toolbar: bool = true,
     theme_settings: ThemeSettings = ThemeSettings{},
+    language: lang.language_controller.languages = lang.language_controller.languages.en,
     start_position: WindowStartPostionSettings = WindowStartPostionSettings{},
     window_style: win32.ui.windows_and_messaging.WINDOW_STYLE = win32.ui.windows_and_messaging.WS_OVERLAPPEDWINDOW,
     wnd_class_settings: WndClassSettings = WndClassSettings{},

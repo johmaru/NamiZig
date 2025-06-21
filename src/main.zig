@@ -24,7 +24,8 @@ pub fn main() !void {
                 .toolbar_background_color = 0x00222222,
                 .toolbar_button_color = 0x00555555,
                 .toolbar_button_text_color = 0x00FFFFFF,
-            }
+            },
+            .language = lang.language_controller.languages.ja,
         };
 
         try window_gen.init(&win_settings);
@@ -44,3 +45,4 @@ const settings = @import("setting.zig");
 const c = @cImport({
     @cInclude("webview_wrapper_c.h");
 });
+const lang = @import("lang.zig");
