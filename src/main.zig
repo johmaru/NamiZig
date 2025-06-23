@@ -26,6 +26,7 @@ pub fn main() !void {
                 .toolbar_button_text_color = 0x00FFFFFF,
             },
             .language = lang.language_controller.languages.ja,
+            .toolbar = true,
         };
 
         try window_gen.init(&win_settings);

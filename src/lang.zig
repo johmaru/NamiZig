@@ -29,7 +29,9 @@ pub const language_controller = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.language_strings.deinit();
+        if (self.language_strings.count() > 0) {
+            self.language_strings.deinit();
+        }
     }
     
 

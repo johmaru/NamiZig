@@ -469,7 +469,9 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
             }
 
             // cleanup toolbar text
-            std.heap.page_allocator.free(g_text_file_button);
+            if (g_text_file_button.len > 0) {
+                std.heap.page_allocator.free(g_text_file_button);
+            }
 
             // cleanup language controller
             g_language_strings.deinit();
