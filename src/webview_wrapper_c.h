@@ -8,6 +8,8 @@ typedef struct controllerSettings {
     const char *virtualHostName;
 } controllerSettings;
 
+typedef void (*WebMessageReceivedCallback)(const char* message_json);
+
  
 #ifndef __cplusplus
 typedef unsigned short wchar_t;
@@ -43,6 +45,7 @@ HRESULT create_webview_controller (void *environment, HWND hwnd, void **controll
 HRESULT navigate_webview          (void *controller,  const char *url);
 void    resize_webview            (void *controller,  RECT bounds);
 void     cleanup_webview           (void *controller,  void *environment);
+HRESULT register_web_message_handler(void *controller, WebMessageReceivedCallback callback);
 WEBVIEW_API HRESULT __stdcall wrapper_SetWindowTheme(HWND hwnd, const wchar_t *pszSubAppName, const wchar_t *pszSubIdList);
 
 extern const unsigned int WRAPPER_TBN_DROPDOWN;

@@ -29,7 +29,9 @@ const DRAWITEMSTRUCT = extern struct {
 
 const S_OK: c.HRESULT = 0;
 const ODT_MENU: u32 = 1;
+const WM_WEB_MESSAGE = win32.ui.windows_and_messaging.WM_APP + 2;
 
+var g_hwnd: ?win32.foundation.HWND = null;
 var g_webview_environment: ?*anyopaque = null;
 var g_webview_controller: ?*anyopaque = null;
 var g_settings: *setting.WindowSettings = undefined;
@@ -43,6 +45,29 @@ var g_text_file_button: [:0]const u16 = undefined;
 const ID_TOOLBAR: u32 = 1001;
 const ID_FILE_BUTTON: u32 = 1002;
 const ID_FILE_EXIT: u32 = 1003;
+
+fn webMessageReceived(message_json: [*c]const u8) callconv(.C) void {
+    const message_slice = std.mem.sliceTo(message_json, 0);
+    const allocator = std.heap.page_allocator;
+
+    const messasge_copy = allocator.dupe(u8, message_slice) catch |err| {
+        std.debug.print("webMessageReceived: Failed to copy message: {any}\n", .{err});
+        return;
+    };
+
+    if (g_hwnd) |hwnd| {
+        _ = win32.ui.windows_and_messaging.PostMessageW(
+            hwnd,
+            WM_WEB_MESSAGE,
+            messasge_copy.len,
+            @intCast(@intFromPtr(messasge_copy.ptr)),
+        );
+    } else {
+        std.debug.print("g_hwnd is null, cannot post message.\n", .{});
+        allocator.free(messasge_copy);
+    }
+
+}
 
 pub fn init(settings: *setting.WindowSettings) !void {
     const os_tag = builtin.os.tag;
@@ -166,6 +191,7 @@ fn win32_init(settings: *setting.WindowSettings) !void {
         hInstance,
         null,
     );
+    g_hwnd = hwnd;
 
     if (hwnd == null) {
         return error.WindowCreationFailed;
@@ -414,6 +440,8 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                 }
                 std.debug.print("WebView created successfully in WM_CREATE.\n", .{});
 
+                hr = c.register_web_message_handler(g_webview_controller.?, webMessageReceived);
+
                 var client_rect: win32.foundation.RECT = undefined;
                 _ = win32.ui.windows_and_messaging.GetClientRect(hwnd, &client_rect);
 
@@ -436,8 +464,7 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                 }
 
                 if (init_navigate_to == null) {
-                    std.debug.print("WIP Feature", .{});
-                    return -1;
+                    init_navigate_to = "https://assets.namizig.com/main.html";
                 }
                 
                 hr = c.navigate_webview(g_webview_controller.?, init_navigate_to.?.ptr);
@@ -446,6 +473,19 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                 }
             }
         }
+            return 0;
+        },
+
+        WM_WEB_MESSAGE => {
+            const message_len: usize = @intCast(wParam);
+            const message_ptr: [*]u8 = @ptrFromInt(@as(usize, @bitCast(lParam)));
+            const message_slice = message_ptr[0..message_len];
+
+            std.debug.print("WM_WEB_MESSAGE received: {s}\n", .{message_slice});
+
+            const allocator = std.heap.page_allocator;
+            allocator.free(message_slice);
+
             return 0;
         },
 

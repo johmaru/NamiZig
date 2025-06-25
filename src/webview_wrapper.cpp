@@ -1,5 +1,10 @@
+#include <corecrt_wstdio.h>
+#include <eventtoken.h>
+#include <fileapi.h>
 #include <intsafe.h>
 #include <shlobj_core.h>
+#include <string>
+#include <vector>
 #if defined(_M_X64) && !defined(_M_AMD64)
 #define _M_AMD64 _M_X64
 #endif
@@ -69,11 +74,64 @@ extern "C" {
     HRESULT navigate_webview(void* controller_in, const char* url_utf8);
     void resize_webview(void* controller_in, RECT bounds);
     void cleanup_webview(void* controller, void* environment);
+    HRESULT register_web_message_handler(void* controller, WebMessageReceivedCallback callback);
 
     HRESULT __stdcall wrapper_SetWindowTheme(HWND hwnd, const wchar_t *pszSubAppName, const wchar_t *pszSubIdList);
 
     const unsigned int WRAPPER_TBN_DROPDOWN = TBN_DROPDOWN;
     const unsigned int WRAPPER_NM_CUSTOMDRAW = NM_CUSTOMDRAW;
+}
+
+static EventRegistrationToken webMessageToken = {};
+static WebMessageReceivedCallback g_webMessageCallback = nullptr;
+
+HRESULT register_web_message_handler(void* controller_in, WebMessageReceivedCallback callback) {
+    if (controller_in == nullptr || callback == nullptr) {
+        return E_POINTER;
+    }
+
+#ifdef __cplusplus
+    g_webMessageCallback = callback;
+    ICoreWebView2Controller* controller = static_cast<ICoreWebView2Controller*>(controller_in);
+    ComPtr<ICoreWebView2> webview;
+    HRESULT hr = controller->get_CoreWebView2(&webview);
+
+    if (SUCCEEDED(hr) && webview != nullptr) {
+        hr = webview->add_WebMessageReceived(
+            Microsoft::WRL::Callback<ICoreWebView2WebMessageReceivedEventHandler>(
+                [](ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
+                    if (g_webMessageCallback == nullptr) {
+                        return E_FAIL;
+                    }
+
+                    LPWSTR message;
+                    HRESULT hr = args->get_WebMessageAsJson(&message);
+                    if (SUCCEEDED(hr)) {
+                        if (message == nullptr) {
+                            g_webMessageCallback("");
+                            return S_OK;
+                        }
+
+                        int utf8_length = WideCharToMultiByte(CP_UTF8, 0, message, -1, NULL, 0, NULL, NULL);
+                        if (utf8_length > 0) {
+                            std::vector<char> utf8_buffer(utf8_length);
+                            WideCharToMultiByte(CP_UTF8, 0, message, -1, utf8_buffer.data(), utf8_length, NULL, NULL);
+                            g_webMessageCallback(utf8_buffer.data());
+                        } else {
+                            g_webMessageCallback("");
+                        }
+                        CoTaskMemFree(message);
+                    }
+                    return S_OK;
+                }
+            ).Get(),
+            &webMessageToken
+        );
+    }
+    return hr;
+#else
+    return E_NOTIMPL;
+#endif
 }
 
 #pragma comment(lib, "uxtheme.lib")
@@ -186,6 +244,144 @@ HRESULT create_webview_controller(void* environment, HWND hwnd, void** controlle
     *controller = nullptr;
 
     #ifdef __cplusplus
+
+    if (settings.isVirtualHost) {
+        wchar_t* subFolder_wchar = nullptr;
+        int wideCharLen = MultiByteToWideChar(CP_UTF8, 0, settings.virtualHostName, -1, NULL, 0);
+        if (wideCharLen > 0) {
+            subFolder_wchar = new (std::nothrow) wchar_t[wideCharLen];
+            if (subFolder_wchar != nullptr) {
+                if (MultiByteToWideChar(CP_UTF8, 0, settings.virtualHostName, -1, subFolder_wchar, wideCharLen) == 0) {
+                    delete[] subFolder_wchar;
+                    subFolder_wchar = nullptr;
+                    OutputDebugStringA("Failed to convert virtualHostName to wchar_t.\n");
+                }
+            } else {
+                OutputDebugStringA("Failed to allocate memory for subFolder_wchar.\n");
+            }
+        } else {
+            OutputDebugStringA("Failed to calculate length for subFolder_wchar or virtualHostName is empty.\n");
+        }
+       
+        if (subFolder_wchar != nullptr) {
+            WCHAR* exeFullDir = new (std::nothrow) WCHAR[MAX_PATH];
+            if (exeFullDir == nullptr) {
+                OutputDebugStringA("Failed to allocate memory for exePath.\n");
+            } else {
+                DWORD pathActualLen = GetModuleFileNameW(NULL, exeFullDir, MAX_PATH);
+                if (pathActualLen == 0 || (pathActualLen == MAX_PATH && GetLastError() == ERROR_INSUFFICIENT_BUFFER)) {
+                    OutputDebugStringA("Failed to get module file name.\n");
+                } else {
+                    WCHAR* lastBackslash = ::wcsrchr(exeFullDir, L'\\');
+                    if (lastBackslash != nullptr) {
+                        *lastBackslash = L'\0';
+                    } else {
+                        OutputDebugStringA("Failed to find backslash in module file name.\n");
+                    }
+
+                    if (lastBackslash != nullptr) {
+                        size_t subFolderLen = wcslen(subFolder_wchar);
+                        size_t exeDirOnlyLen = wcslen(exeFullDir);
+                        size_t folderPathLen = exeDirOnlyLen + 1 + subFolderLen + 1;
+                        wchar_t* folderPath = new (std::nothrow) wchar_t[folderPathLen];
+                        if (folderPath != nullptr) {
+                            swprintf_s(folderPath, folderPathLen, L"%s\\%s", exeFullDir, subFolder_wchar);
+
+                            wchar_t dbgMsg[MAX_PATH + 100];
+                            swprintf_s(dbgMsg, _countof(dbgMsg), L"Attempting to create directory at: %s\n", folderPath);
+                            OutputDebugStringW(dbgMsg);
+
+                            DWORD sh_create_dir_result = SHCreateDirectoryExW(NULL, folderPath, NULL);
+                            if (sh_create_dir_result == ERROR_SUCCESS || sh_create_dir_result == ERROR_ALREADY_EXISTS) {
+                                if (sh_create_dir_result == ERROR_SUCCESS) {
+                                    OutputDebugStringA("SHCreateDirectoryExW call succeeded.\n");
+                                } else {
+                                    OutputDebugStringA("Directory already existed (checked by SHCreateDirectoryExW).\n");
+                                }
+
+                                const wchar_t* htmlFileName = L"main.html";
+                                size_t htmlFileNameLen = wcslen(htmlFileName);
+                                size_t folderHtmlPathLen = wcslen(folderPath) + 1 + htmlFileNameLen + 1;
+                                wchar_t* folderHtmlPath = new (std::nothrow) wchar_t[folderHtmlPathLen];
+
+                                if (folderHtmlPath != nullptr) {
+                                    swprintf_s(folderHtmlPath, folderHtmlPathLen, L"%s\\%s", folderPath, htmlFileName);
+
+                                    DWORD fileAttribute = GetFileAttributesW(folderHtmlPath);
+
+                                    if (fileAttribute == INVALID_FILE_ATTRIBUTES) {
+                                        HANDLE hFile = CreateFileW(
+                                        folderHtmlPath,
+                                        GENERIC_WRITE,
+                                        0,
+                                        NULL,
+                                        CREATE_ALWAYS,
+                                        FILE_ATTRIBUTE_NORMAL,
+                                        NULL
+                                    );
+                                    
+                                    if (hFile == INVALID_HANDLE_VALUE) {
+                                        char err_buffer[256];
+                                        sprintf_s(err_buffer, sizeof(err_buffer), "Failed to create main.html file. Error: %lu\n", GetLastError());
+                                        OutputDebugStringA(err_buffer);
+                                    } else {
+                                        const char* htmlContent = "<html><head><meta charset=\"UTF-8\"></head><body>"
+                                                                  "<h1>Hello from NamiZig!</h1>"
+                                                                  "<button id=\"myButton\">Send Message to Zig</button>"
+                                                                  "<script>"
+                                                                  "document.getElementById('myButton').addEventListener('click', () => {"
+                                                                  "  const message = { command: 'buttonClick', payload: { timestamp: new Date().toISOString() } };"
+                                                                  "  window.chrome.webview.postMessage(message);"
+                                                                  "  console.log('Message sent:', message);"
+                                                                  "});"
+                                                                  "</script>"
+                                                                  "</body></html>";
+                                        DWORD bytesToWrite = (DWORD)strlen(htmlContent);
+                                        DWORD bytesWritten = 0;
+
+                                        if (WriteFile(hFile, htmlContent, bytesToWrite, &bytesWritten, NULL)) {
+                                            if (bytesWritten != bytesToWrite) {
+                                                char err_buffer[256];
+                                                sprintf_s(err_buffer, sizeof(err_buffer), "Partial write to main.html. Expected: %lu, Written: %lu\n", bytesToWrite, bytesWritten);
+                                                OutputDebugStringA(err_buffer);
+                                            }
+                                        } else {
+                                            char err_buffer[256];
+                                            sprintf_s(err_buffer, sizeof(err_buffer), "Failed to write to main.html. Error: %lu\n", GetLastError());
+                                            OutputDebugStringA(err_buffer);
+                                        }
+                                        CloseHandle(hFile);
+                                    }
+                                    } else {
+                                        OutputDebugStringA("main.html file already exists.\n");
+                                    }
+                                    
+                                    delete[] folderHtmlPath;
+                                } else {
+                                    const wchar_t* htmlFileName = L"main.html";
+                                    size_t htmlFileNameLen = wcslen(htmlFileName);
+                                    size_t folderHtmlPathLen = wcslen(folderPath) + 1 + htmlFileNameLen + 1;
+                                    wchar_t* folderHtmlPath = new (std::nothrow) wchar_t[folderHtmlPathLen];
+                                                            
+                                }
+                            } else {
+                                char err_buffer[256];
+                                sprintf_s(err_buffer, sizeof(err_buffer), "Failed to create directory using SHCreateDirectoryExW: %ls. Error: %lu\n", folderPath, sh_create_dir_result);
+                                OutputDebugStringA(err_buffer);
+                            }
+                            delete[] folderPath;
+                        } else {
+                            OutputDebugStringA("Failed to allocate memory for folder path.\n");
+                        }
+                    }
+                }
+                delete[] exeFullDir;
+            }
+            delete[] subFolder_wchar;
+        }
+    }
+
+
     ICoreWebView2Environment* env = static_cast<ICoreWebView2Environment*>(environment);
     HANDLE hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
     if (hEvent == NULL) {
@@ -265,101 +461,77 @@ HRESULT create_webview_controller(void* environment, HWND hwnd, void** controlle
                                 if (SUCCEEDED(hr) && webview11 != nullptr) {
                                     LPCWSTR hostName = L"assets.namizig.com";
 
-                                    
-
-                                        wchar_t* subFolder_wchar = nullptr;
-                                        int wideCharLen = 0;
-                                       
-                                        wideCharLen = MultiByteToWideChar(CP_UTF8, 0, settings.virtualHostName, -1, NULL, 0);
-                                            if (wideCharLen > 0) {
-                                                subFolder_wchar = new (std::nothrow) wchar_t[wideCharLen];
-                                                if (subFolder_wchar != nullptr) {
-                                                    if (MultiByteToWideChar(CP_UTF8, 0, settings.virtualHostName, -1, subFolder_wchar, wideCharLen) == 0) {
-                                                        
-                                                        delete[] subFolder_wchar;
-                                                        subFolder_wchar = nullptr;
-                                                        OutputDebugStringA("Failed to convert virtualHostName to wchar_t.\n");
-
-                                                    }
-                                                } else {
-                                                    OutputDebugStringA("Failed to allocate memory for subFolder_wchar.\n");
-
-                                                }
-                                            } else {
-                                                OutputDebugStringA("Failed to calculate length for subFolder_wchar or virtualHostName is empty.\n");
-                                            }
-                                       
+                                    wchar_t* subFolder_wchar = nullptr;
+                                    int wideCharLen = 0;
+                                   
+                                    wideCharLen = MultiByteToWideChar(CP_UTF8, 0, settings.virtualHostName, -1, NULL, 0);
+                                    if (wideCharLen > 0) {
+                                        subFolder_wchar = new (std::nothrow) wchar_t[wideCharLen];
                                         if (subFolder_wchar != nullptr) {
-                                            WCHAR* exeFullDir = new (std::nothrow) WCHAR[MAX_PATH];
-                                            if (exeFullDir == nullptr) {
-                                                OutputDebugStringA("Failed to allocate memory for exePath.\n");
+                                            if (MultiByteToWideChar(CP_UTF8, 0, settings.virtualHostName, -1, subFolder_wchar, wideCharLen) == 0) {
                                                 delete[] subFolder_wchar;
-                                                return E_OUTOFMEMORY;
+                                                subFolder_wchar = nullptr;
+                                                OutputDebugStringA("Failed to convert virtualHostName to wchar_t.\n");
                                             }
-                                            DWORD pathActualLen = GetModuleFileNameW(NULL, exeFullDir, MAX_PATH);
-                                            if (pathActualLen == 0 || (pathActualLen == MAX_PATH && GetLastError() == ERROR_INSUFFICIENT_BUFFER)) {
-                                                delete[] exeFullDir;
-                                                delete[] subFolder_wchar;
-                                                OutputDebugStringA("Failed to get module file name.\n");
-                                                return HRESULT_FROM_WIN32(GetLastError());
-                                            }
-                                            WCHAR* lastBackslash = ::wcsrchr(exeFullDir, L'\\');
-                                            if (lastBackslash != nullptr) {
-                                                *lastBackslash = L'\0';
-                                            } else {
-                                                delete[] exeFullDir;
-                                                delete[] subFolder_wchar;
-                                                OutputDebugStringA("Failed to find backslash in module file name.\n");
-                                                return E_FAIL;
-                                            }
-                                            size_t subFolderLen = wcslen(subFolder_wchar);
-                                            size_t exeDirOnlyLen = wcslen(exeFullDir);
-                                            size_t folderPathLen = exeDirOnlyLen + 1 + subFolderLen + 1;
-                                            wchar_t* folderPath = new (std::nothrow) wchar_t[folderPathLen];
-                                            if (folderPath != nullptr) {
-                                                swprintf_s(folderPath, folderPathLen, L"%s\\%s", exeFullDir, subFolder_wchar);
-
-                                                wchar_t dbgMsg[MAX_PATH + 100];
-                                                swprintf_s(dbgMsg, _countof(dbgMsg), L"Attempting to create directory at: %s\n", folderPath);
-                                                OutputDebugStringW(dbgMsg);
-
-                                                DWORD sh_create_dir_result = SHCreateDirectoryExW(NULL, folderPath, NULL);
-                                                if (sh_create_dir_result == ERROR_SUCCESS || sh_create_dir_result == ERROR_ALREADY_EXISTS) {
-                                                    if (sh_create_dir_result == ERROR_SUCCESS) {
-                                                        OutputDebugStringA("SHCreateDirectoryExW call succeeded.\n");
-                                                    } else {
-                                                        OutputDebugStringA("Directory already existed (checked by SHCreateDirectoryExW).\n");
-                                                    }
-                                                } else {
-                                                    char err_buffer[256];
-                                                    
-                                                    sprintf_s(err_buffer, sizeof(err_buffer), "Failed to create directory using SHCreateDirectoryExW: %ls. Error: %lu\n", folderPath, sh_create_dir_result);
-                                                    OutputDebugStringA(err_buffer);
-                                                }
-
-                                                hr = webview11->SetVirtualHostNameToFolderMapping(
-                                                    hostName,
-                                                    folderPath,
-                                                    COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW
-                                                );
-                                                delete[] folderPath;
-
-                                                if (SUCCEEDED(hr)) {
-                                                    OutputDebugStringA("Virtual host name mapping set successfully.\n");
-                                                } else {
-                                                    char err_buffer[256];
-                                                    sprintf_s(err_buffer, sizeof(err_buffer), "Failed to set virtual host name mapping. HRESULT: 0x%lX\n", hr);
-                                                    OutputDebugStringA(err_buffer);
-                                                }
-                                            } else {
-                                                OutputDebugStringA("Failed to allocate memory for folder path.\n");
-                                            }
-                                            delete[]exeFullDir;
                                         } else {
-                                            char err_buffer[256];
-                                            OutputDebugStringA(err_buffer);
+                                            OutputDebugStringA("Failed to allocate memory for subFolder_wchar.\n");
                                         }
-                                    
+                                    } else {
+                                        OutputDebugStringA("Failed to calculate length for subFolder_wchar or virtualHostName is empty.\n");
+                                    }
+                                   
+                                    if (subFolder_wchar != nullptr) {
+                                        WCHAR* exeFullDir = new (std::nothrow) WCHAR[MAX_PATH];
+                                        if (exeFullDir == nullptr) {
+                                            OutputDebugStringA("Failed to allocate memory for exePath.\n");
+                                            delete[] subFolder_wchar;
+                                            return E_OUTOFMEMORY;
+                                        }
+                                        DWORD pathActualLen = GetModuleFileNameW(NULL, exeFullDir, MAX_PATH);
+                                        if (pathActualLen == 0 || (pathActualLen == MAX_PATH && GetLastError() == ERROR_INSUFFICIENT_BUFFER)) {
+                                            delete[] exeFullDir;
+                                            delete[] subFolder_wchar;
+                                            OutputDebugStringA("Failed to get module file name.\n");
+                                            return HRESULT_FROM_WIN32(GetLastError());
+                                        }
+                                        WCHAR* lastBackslash = ::wcsrchr(exeFullDir, L'\\');
+                                        if (lastBackslash != nullptr) {
+                                            *lastBackslash = L'\0';
+                                        } else {
+                                            delete[] exeFullDir;
+                                            delete[] subFolder_wchar;
+                                            OutputDebugStringA("Failed to find backslash in module file name.\n");
+                                            return E_FAIL;
+                                        }
+                                        size_t subFolderLen = wcslen(subFolder_wchar);
+                                        size_t exeDirOnlyLen = wcslen(exeFullDir);
+                                        size_t folderPathLen = exeDirOnlyLen + 1 + subFolderLen + 1;
+                                        wchar_t* folderPath = new (std::nothrow) wchar_t[folderPathLen];
+                                        if (folderPath != nullptr) {
+                                            swprintf_s(folderPath, folderPathLen, L"%s\\%s", exeFullDir, subFolder_wchar);
+
+                                            hr = webview11->SetVirtualHostNameToFolderMapping(
+                                                hostName,
+                                                folderPath,
+                                                COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW
+                                            );
+                                            delete[] folderPath;
+
+                                            if (SUCCEEDED(hr)) {
+                                                OutputDebugStringA("Virtual host name mapping set successfully.\n");
+                                            } else {
+                                                char err_buffer[256];
+                                                sprintf_s(err_buffer, sizeof(err_buffer), "Failed to set virtual host name mapping. HRESULT: 0x%lX\n", hr);
+                                                OutputDebugStringA(err_buffer);
+                                            }
+                                        } else {
+                                            OutputDebugStringA("Failed to allocate memory for folder path.\n");
+                                        }
+                                        delete[]exeFullDir;
+                                    }
+                                    if (subFolder_wchar) {
+                                        delete[] subFolder_wchar;
+                                    }
                                 } else {
                                     char err_buffer[256];
                                     sprintf_s(err_buffer, sizeof(err_buffer), "ICoreWebView2_11 not supported. Virtual host feature unavailable. HRESULT: 0x%lX\n", hr);
