@@ -16,3 +16,23 @@ So now only supported windows x64 msvc environment.
 # compile rule
 
 webview/x64/WebView2Loader.dll copy to zig-out/bin
+
+# [WIP] Tutorial
+
+Supported.call zig background function from html Example here
+
+```
+<html>
+    <head>
+    <meta charset="UTF-8">
+    </head>
+
+    <body>
+        <h1>Hello from NamiZig!</h1>
+        <button id="myButton">Exit Zig</button>
+        <template click, exitAPP, 'myButton'></template>
+    </body>
+    
+</html>
+
+```
