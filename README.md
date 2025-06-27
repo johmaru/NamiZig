@@ -15,7 +15,11 @@ So now only supported windows x64 msvc environment.
 
 # compile rule
 
-webview/x64/WebView2Loader.dll copy to zig-out/bin
+- ```mkdir build && cd build```
+
+- ```cmake ..```
+
+- ```cmake --build . --target run```
 
 # [WIP] Tutorial
 
