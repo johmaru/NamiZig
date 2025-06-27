@@ -38,6 +38,7 @@ var g_settings: *setting.WindowSettings = undefined;
 var g_hToolbar: ?win32.foundation.HWND = null;
 var g_hMenuFile: ?win32.ui.windows_and_messaging.HMENU = null;
 var g_language_strings: lang.language_controller = undefined;
+var g_html_content_buffer_for_virtual_host: ?[]u8 = null;
 
 // global text definitions
 var g_text_file_button: [:0]const u16 = undefined;
@@ -428,12 +429,96 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
 
             if (g_webview_controller == null) {
                 const c_hwnd: c.HWND = @ptrFromInt(@intFromPtr(hwnd));
+                const allocator = std.heap.page_allocator;
+
+                if (g_settings.webview_controller_settings.isVirtualHost) {
+
+                    const exe_path = std.fs.selfExePathAlloc(allocator) catch |err| {
+                        std.debug.print("WM_CREATE: Failed to get self executable path: {any}\n", .{err});
+                        return -1;
+                    };
+                    defer allocator.free(exe_path);
+
+                    const exe_dir = std.fs.path.dirname(exe_path).?;
+
+                    const html_path = std.fs.path.join(allocator, &.{ exe_dir, "testvirtualhost", "main.html" }) catch |err| {
+                        std.debug.print("WM_CREATE: Failed to join path: {any}\n", .{err});
+                        return -1;
+                    };
+                    defer allocator.free(html_path);
+
+                    if (std.fs.openFileAbsolute(html_path, .{.mode = .read_only})) |content_file| {
+                        defer content_file.close();
+                        const content = content_file.readToEndAlloc(allocator, 1 * 1024 * 1024) catch |read_err| {
+                            std.debug.print("WM_CREATE: Failed to read HTML content for virtual host from '{s}': {any}\n", .{ html_path, read_err });
+                            return -1;
+                        };
+                        defer allocator.free(content);
+
+                        const buffer_with_null = allocator.alloc(u8, content.len + 1) catch |alloc_err| {
+                            std.debug.print("WM_CREATE: Failed to allocate buffer for HTML content: {any}\n", .{alloc_err});
+                            return -1;
+                        };
+                        @memcpy(buffer_with_null[0..content.len], content);
+                        buffer_with_null[content.len] = 0;
+                        g_html_content_buffer_for_virtual_host = buffer_with_null;
+                    } else |err| {
+                        if (err == error.FileNotFound) {
+                            const html_dir_path = std.fs.path.dirname(html_path).?;
+                            std.fs.makeDirAbsolute(html_dir_path) catch |mkdir_err| {
+                                if (mkdir_err != error.PathAlreadyExists) {
+                                    std.debug.print("WM_CREATE: Failed to create directory '{s}': {any}\n", .{ html_dir_path, mkdir_err });
+                                    return -1;
+                                }
+                            };
+
+                           const file = std.fs.createFileAbsolute(html_path, .{}) catch |create_err| {
+                                std.debug.print("WM_CREATE: Failed to create HTML file at '{s}': {any}\n", .{ html_path, create_err });
+                                return -1;
+                            };
+                            const default_html_content = "<html><head><meta charset=\"UTF-8\"></head><body><h1>Hello from NamiZig!</h1><button id=\"myButton\">Send Message to Zig</button><template click, 'myButton', timestamp: new Date().toISOString()></template></body></html>";
+                            file.writeAll(default_html_content) catch |write_err| {
+                                std.debug.print("WM_CREATE: Failed to write default HTML content to '{s}': {any}\n", .{ html_path, write_err });
+                            };
+                            file.close();
+
+                            const new_file = std.fs.openFileAbsolute(html_path, .{.mode = .read_only}) catch |read_err| {
+                                std.debug.print("WM_CREATE: Failed to read newly created HTML file: {any}\n", .{read_err});
+                                return -1;
+                            };
+                            defer new_file.close();
+                            const content = new_file.readToEndAlloc(allocator, 1 * 1024 * 1024) catch |read_err| {
+                                std.debug.print("WM_CREATE: Failed to read content from newly created file: {any}\n", .{read_err});
+                                return -1;
+                            };
+                            defer allocator.free(content);
+
+                            const buffer_with_null = allocator.alloc(u8, content.len + 1) catch |alloc_err| {
+                                std.debug.print("WM_CREATE: Failed to allocate buffer for HTML content: {any}\n", .{alloc_err});
+                                return -1;
+                            };
+                            @memcpy(buffer_with_null[0..content.len], content);
+                            buffer_with_null[content.len] = 0;
+                            g_html_content_buffer_for_virtual_host = buffer_with_null;
+                        } else {
+                            std.debug.print("WM_CREATE: Failed to read HTML content for virtual host from '{s}': {any}\n", .{ html_path, err });
+                        }
+                    }
+
+                    if (g_html_content_buffer_for_virtual_host) |buffer| {
+                        g_settings.webview_controller_settings.htmlContent = @ptrCast(buffer.ptr);
+                    } else {
+                        g_settings.webview_controller_settings.htmlContent = null;
+                    }
+                }
+
                 hr = c.create_webview_controller(
           g_webview_environment.?,
             c_hwnd,
     &g_webview_controller,
        g_settings.webview_controller_settings,
              );
+
                 if (hr != S_OK) {
                     std.debug.print("WM_CREATE: create_webview_controller failed. HRESULT: 0x{X:0>8}\n", .{hr});
                     return -1;
@@ -463,11 +548,14 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                    c.resize_webview(g_webview_controller.?, init_rect);
                 }
 
-                if (init_navigate_to == null) {
-                    init_navigate_to = "https://assets.namizig.com/main.html";
+                if (g_settings.webview_controller_settings.isVirtualHost) {
+                    const navigate_url = "https://assets.namizig.com/main.html";
+                    hr = c.navigate_webview(g_webview_controller.?, navigate_url.ptr);
+                } else if (init_navigate_to) |url| {
+                    hr = c.navigate_webview(g_webview_controller.?, url.ptr);
+                } else {
+                    hr = S_OK;
                 }
-                
-                hr = c.navigate_webview(g_webview_controller.?, init_navigate_to.?.ptr);
                 if (hr != S_OK) {
                     std.debug.print("Failed to navigate in WM_CREATE. HRESULT: 0x{X:0>8}\n", .{hr});
                 }
@@ -484,7 +572,29 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
             std.debug.print("WM_WEB_MESSAGE received: {s}\n", .{message_slice});
 
             const allocator = std.heap.page_allocator;
-            allocator.free(message_slice);
+            defer allocator.free(message_slice);
+
+            var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+            const json_allocator = gpa.allocator();
+            defer _ = gpa.deinit();
+
+            const parsed = std.json.parseFromSlice(std.json.Value, json_allocator, message_slice, .{}) catch |err| {
+                std.debug.print("WM_WEB_MESSAGE: Failed to parse JSON message: {any}\n", .{err});
+                return 0;
+            };
+            defer parsed.deinit();
+
+            const message_obj = parsed.value.object;
+            if (std.mem.eql(u8, message_obj.get("command").?.string, "buttonClick") and std.mem.eql(u8, message_obj.get("event_key").?.string,"exitAPP")) {
+                std.debug.print("WM_WEB_MESSAGE: Click event for exitAPP received. Exiting application.\n", .{});
+                _ = win32.ui.windows_and_messaging.DestroyWindow(hwnd);
+                return 0;
+            } else if (std.mem.eql(u8, message_obj.get("command").?.string, "buttonClick") and std.mem.eql(u8, message_obj.get("event_key").?.string,"sendMessageToZig")) {
+                const timestamp = message_obj.get("payload").?.string;
+                std.debug.print("WM_WEB_MESSAGE: Click event for sendMessageToZig received with timestamp: {s}\n", .{timestamp});
+            } else {
+                std.debug.print("WM_WEB_MESSAGE: Unhandled command or event_key in message: {s}\n", .{message_slice});       
+            }
 
             return 0;
         },
@@ -511,6 +621,11 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
             // cleanup toolbar text
             if (g_text_file_button.len > 0) {
                 std.heap.page_allocator.free(g_text_file_button);
+            }
+
+            if (g_html_content_buffer_for_virtual_host) |buffer| {
+                std.heap.page_allocator.free(buffer);
+                g_html_content_buffer_for_virtual_host = null;
             }
 
             // cleanup language controller

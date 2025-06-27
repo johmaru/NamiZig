@@ -6,6 +6,7 @@ typedef struct controllerSettings {
     bool contextMenu;
     bool isVirtualHost;
     const char *virtualHostName;
+    const char *htmlContent;
 } controllerSettings;
 
 typedef void (*WebMessageReceivedCallback)(const char* message_json);

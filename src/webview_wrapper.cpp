@@ -1,10 +1,3 @@
-#include <corecrt_wstdio.h>
-#include <eventtoken.h>
-#include <fileapi.h>
-#include <intsafe.h>
-#include <shlobj_core.h>
-#include <string>
-#include <vector>
 #if defined(_M_X64) && !defined(_M_AMD64)
 #define _M_AMD64 _M_X64
 #endif
@@ -22,25 +15,25 @@
 #include <winnt.h>
 #include <winuser.h> */
 #endif
-  #include <windows.h>
-  #include <commctrl.h>
-  #include <cwchar>
+#include <windows.h>
 
-  #include <synchapi.h>
-  #include <winbase.h>
-  #include <winuser.h>
-
-  #include <stdio.h>
+#include <string>
+#include <vector>
+#include <fstream>
+#include <sstream>
+#include <cwchar>
+#include <cstddef>
 
 #ifdef __cplusplus
-  
-  #include <ole2.h>
-  #include <oleauto.h>
-  #include <combaseapi.h>
-  #include <wrl/client.h>
-  #include <wrl/event.h>
-  #include <shlobj.h>
-  #include <Uxtheme.h>
+#include <commctrl.h>
+#include <shlobj.h>
+#include <shlwapi.h>
+#include <Uxtheme.h>
+#include <ole2.h>
+#include <oleauto.h>
+#include <combaseapi.h>
+#include <wrl/client.h>
+#include <wrl/event.h>
 #else
   #include <stddef.h>
   #include <stdint.h>
@@ -54,10 +47,10 @@
   #endif
 #endif
 
-#include <cstddef>
-
 #include <WebView2EnvironmentOptions.h>
 #include <WebView2.h>
+
+#pragma comment(lib, "shlwapi.lib")
 
 #define WEBVIEW_WRAPPER_EXPORTS
 #include "webview_wrapper_c.h"
@@ -243,145 +236,7 @@ HRESULT create_webview_controller(void* environment, HWND hwnd, void** controlle
 
     *controller = nullptr;
 
-    #ifdef __cplusplus
-
-    if (settings.isVirtualHost) {
-        wchar_t* subFolder_wchar = nullptr;
-        int wideCharLen = MultiByteToWideChar(CP_UTF8, 0, settings.virtualHostName, -1, NULL, 0);
-        if (wideCharLen > 0) {
-            subFolder_wchar = new (std::nothrow) wchar_t[wideCharLen];
-            if (subFolder_wchar != nullptr) {
-                if (MultiByteToWideChar(CP_UTF8, 0, settings.virtualHostName, -1, subFolder_wchar, wideCharLen) == 0) {
-                    delete[] subFolder_wchar;
-                    subFolder_wchar = nullptr;
-                    OutputDebugStringA("Failed to convert virtualHostName to wchar_t.\n");
-                }
-            } else {
-                OutputDebugStringA("Failed to allocate memory for subFolder_wchar.\n");
-            }
-        } else {
-            OutputDebugStringA("Failed to calculate length for subFolder_wchar or virtualHostName is empty.\n");
-        }
-       
-        if (subFolder_wchar != nullptr) {
-            WCHAR* exeFullDir = new (std::nothrow) WCHAR[MAX_PATH];
-            if (exeFullDir == nullptr) {
-                OutputDebugStringA("Failed to allocate memory for exePath.\n");
-            } else {
-                DWORD pathActualLen = GetModuleFileNameW(NULL, exeFullDir, MAX_PATH);
-                if (pathActualLen == 0 || (pathActualLen == MAX_PATH && GetLastError() == ERROR_INSUFFICIENT_BUFFER)) {
-                    OutputDebugStringA("Failed to get module file name.\n");
-                } else {
-                    WCHAR* lastBackslash = ::wcsrchr(exeFullDir, L'\\');
-                    if (lastBackslash != nullptr) {
-                        *lastBackslash = L'\0';
-                    } else {
-                        OutputDebugStringA("Failed to find backslash in module file name.\n");
-                    }
-
-                    if (lastBackslash != nullptr) {
-                        size_t subFolderLen = wcslen(subFolder_wchar);
-                        size_t exeDirOnlyLen = wcslen(exeFullDir);
-                        size_t folderPathLen = exeDirOnlyLen + 1 + subFolderLen + 1;
-                        wchar_t* folderPath = new (std::nothrow) wchar_t[folderPathLen];
-                        if (folderPath != nullptr) {
-                            swprintf_s(folderPath, folderPathLen, L"%s\\%s", exeFullDir, subFolder_wchar);
-
-                            wchar_t dbgMsg[MAX_PATH + 100];
-                            swprintf_s(dbgMsg, _countof(dbgMsg), L"Attempting to create directory at: %s\n", folderPath);
-                            OutputDebugStringW(dbgMsg);
-
-                            DWORD sh_create_dir_result = SHCreateDirectoryExW(NULL, folderPath, NULL);
-                            if (sh_create_dir_result == ERROR_SUCCESS || sh_create_dir_result == ERROR_ALREADY_EXISTS) {
-                                if (sh_create_dir_result == ERROR_SUCCESS) {
-                                    OutputDebugStringA("SHCreateDirectoryExW call succeeded.\n");
-                                } else {
-                                    OutputDebugStringA("Directory already existed (checked by SHCreateDirectoryExW).\n");
-                                }
-
-                                const wchar_t* htmlFileName = L"main.html";
-                                size_t htmlFileNameLen = wcslen(htmlFileName);
-                                size_t folderHtmlPathLen = wcslen(folderPath) + 1 + htmlFileNameLen + 1;
-                                wchar_t* folderHtmlPath = new (std::nothrow) wchar_t[folderHtmlPathLen];
-
-                                if (folderHtmlPath != nullptr) {
-                                    swprintf_s(folderHtmlPath, folderHtmlPathLen, L"%s\\%s", folderPath, htmlFileName);
-
-                                    DWORD fileAttribute = GetFileAttributesW(folderHtmlPath);
-
-                                    if (fileAttribute == INVALID_FILE_ATTRIBUTES) {
-                                        HANDLE hFile = CreateFileW(
-                                        folderHtmlPath,
-                                        GENERIC_WRITE,
-                                        0,
-                                        NULL,
-                                        CREATE_ALWAYS,
-                                        FILE_ATTRIBUTE_NORMAL,
-                                        NULL
-                                    );
-                                    
-                                    if (hFile == INVALID_HANDLE_VALUE) {
-                                        char err_buffer[256];
-                                        sprintf_s(err_buffer, sizeof(err_buffer), "Failed to create main.html file. Error: %lu\n", GetLastError());
-                                        OutputDebugStringA(err_buffer);
-                                    } else {
-                                        const char* htmlContent = "<html><head><meta charset=\"UTF-8\"></head><body>"
-                                                                  "<h1>Hello from NamiZig!</h1>"
-                                                                  "<button id=\"myButton\">Send Message to Zig</button>"
-                                                                  "<script>"
-                                                                  "document.getElementById('myButton').addEventListener('click', () => {"
-                                                                  "  const message = { command: 'buttonClick', payload: { timestamp: new Date().toISOString() } };"
-                                                                  "  window.chrome.webview.postMessage(message);"
-                                                                  "  console.log('Message sent:', message);"
-                                                                  "});"
-                                                                  "</script>"
-                                                                  "</body></html>";
-                                        DWORD bytesToWrite = (DWORD)strlen(htmlContent);
-                                        DWORD bytesWritten = 0;
-
-                                        if (WriteFile(hFile, htmlContent, bytesToWrite, &bytesWritten, NULL)) {
-                                            if (bytesWritten != bytesToWrite) {
-                                                char err_buffer[256];
-                                                sprintf_s(err_buffer, sizeof(err_buffer), "Partial write to main.html. Expected: %lu, Written: %lu\n", bytesToWrite, bytesWritten);
-                                                OutputDebugStringA(err_buffer);
-                                            }
-                                        } else {
-                                            char err_buffer[256];
-                                            sprintf_s(err_buffer, sizeof(err_buffer), "Failed to write to main.html. Error: %lu\n", GetLastError());
-                                            OutputDebugStringA(err_buffer);
-                                        }
-                                        CloseHandle(hFile);
-                                    }
-                                    } else {
-                                        OutputDebugStringA("main.html file already exists.\n");
-                                    }
-                                    
-                                    delete[] folderHtmlPath;
-                                } else {
-                                    const wchar_t* htmlFileName = L"main.html";
-                                    size_t htmlFileNameLen = wcslen(htmlFileName);
-                                    size_t folderHtmlPathLen = wcslen(folderPath) + 1 + htmlFileNameLen + 1;
-                                    wchar_t* folderHtmlPath = new (std::nothrow) wchar_t[folderHtmlPathLen];
-                                                            
-                                }
-                            } else {
-                                char err_buffer[256];
-                                sprintf_s(err_buffer, sizeof(err_buffer), "Failed to create directory using SHCreateDirectoryExW: %ls. Error: %lu\n", folderPath, sh_create_dir_result);
-                                OutputDebugStringA(err_buffer);
-                            }
-                            delete[] folderPath;
-                        } else {
-                            OutputDebugStringA("Failed to allocate memory for folder path.\n");
-                        }
-                    }
-                }
-                delete[] exeFullDir;
-            }
-            delete[] subFolder_wchar;
-        }
-    }
-
-
+#ifdef __cplusplus
     ICoreWebView2Environment* env = static_cast<ICoreWebView2Environment*>(environment);
     HANDLE hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
     if (hEvent == NULL) {
@@ -393,161 +248,144 @@ HRESULT create_webview_controller(void* environment, HWND hwnd, void** controlle
     HRESULT hr_async_start = env->CreateCoreWebView2Controller(
         hwnd,
         Microsoft::WRL::Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
-            [controller, hwnd, hEvent, &callback_hr,settings](HRESULT result, ICoreWebView2Controller* ctrl) -> HRESULT {
-
+            [controller, hwnd, hEvent, &callback_hr, settings, env](HRESULT result, ICoreWebView2Controller* ctrl) -> HRESULT {
                 OutputDebugStringA("CreateCoreWebView2Controller COMPLETED HANDLER called.\n");
                 char buffer[256];
                 sprintf_s(buffer, sizeof(buffer), "  Callback Result HRESULT: 0x%lX\n", result);
                 OutputDebugStringA(buffer);
-                if (ctrl != nullptr) {
-                    sprintf_s(buffer, sizeof(buffer), "  Controller pointer: %p\n", ctrl);
-                    OutputDebugStringA(buffer);
-                } else {
-                    OutputDebugStringA("  Controller pointer is NULL.\n");
-                }
 
                 callback_hr = result;
 
                 if (SUCCEEDED(result) && ctrl != nullptr) {
-                    if (ctrl != nullptr) {
-                        sprintf_s(buffer, sizeof(buffer), "  Controller pointer: %p\n", ctrl);
-                        OutputDebugStringA(buffer);
-                    } else {
-                        OutputDebugStringA("  Controller pointer is NULL (FAILED result).\n");
-                    }
-                        *controller = ctrl;
-                        ctrl->AddRef();
+                    *controller = ctrl;
+                    ctrl->AddRef();
 
-                        sprintf_s(buffer, sizeof(buffer), "  *controller set to: %p\n", *controller);
-                        OutputDebugStringA(buffer);
+                    ComPtr<ICoreWebView2> webview;
+                    HRESULT hr = ctrl->get_CoreWebView2(&webview);
 
-                        if (settings.contextMenu) {
-                            ComPtr<ICoreWebView2> webview;
-                            HRESULT hr = ctrl->get_CoreWebView2(&webview);
-                            if (SUCCEEDED(hr) && webview != nullptr) {
-                                ComPtr<ICoreWebView2Settings> webview_settings;
-                                HRESULT hr_settings = webview->get_Settings(&webview_settings);
-                                if (SUCCEEDED(hr_settings) && webview_settings != nullptr) {
-                                    webview_settings->put_AreDefaultContextMenusEnabled(TRUE);
-                                    OutputDebugStringA("Context menu enabled.\n");
-                                } else {
-                                    OutputDebugStringA("Failed to get WebView2 settings.\n");
-                                }
-                            }
-                        } else {
-                            ComPtr<ICoreWebView2> webview;
-                            HRESULT hr = ctrl->get_CoreWebView2(&webview);
-                            if (SUCCEEDED(hr) && webview != nullptr) {
-                                ComPtr<ICoreWebView2Settings> webview_settings;
-                                HRESULT hr_settings = webview->get_Settings(&webview_settings);
-                                if (SUCCEEDED(hr_settings) && webview_settings != nullptr) {
-                                    webview_settings->put_AreDefaultContextMenusEnabled(FALSE);
-                                    OutputDebugStringA("Context menu disabled.\n");
-                                } else {
-                                    OutputDebugStringA("Failed to get WebView2 settings.\n");
-                                }
-                            }
+                    if (SUCCEEDED(hr) && webview != nullptr) {
+                        ComPtr<ICoreWebView2Settings> webview_settings;
+                        HRESULT hr_settings = webview->get_Settings(&webview_settings);
+                        if (SUCCEEDED(hr_settings) && webview_settings != nullptr) {
+                            webview_settings->put_AreDefaultContextMenusEnabled(settings.contextMenu);
                         }
 
                         if (settings.isVirtualHost) {
-                            ComPtr<ICoreWebView2> webview;
-                            HRESULT hr = ctrl->get_CoreWebView2(&webview);
+                            webview->AddWebResourceRequestedFilter(L"https://assets.namizig.com/*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
 
-                            if (SUCCEEDED(hr) && webview != nullptr) {
+                            EventRegistrationToken token;
+                            webview->add_WebResourceRequested(
+                                Microsoft::WRL::Callback<ICoreWebView2WebResourceRequestedEventHandler>(
+                                    [settings, env](ICoreWebView2* sender, ICoreWebView2WebResourceRequestedEventArgs* args) -> HRESULT {
+                                        ComPtr<ICoreWebView2WebResourceRequest> request;
+                                        args->get_Request(&request);
+                                        LPWSTR uri_w;
+                                        request->get_Uri(&uri_w);
+                                        std::wstring uri(uri_w);
+                                        CoTaskMemFree(uri_w);
 
-                                ComPtr<ICoreWebView2_11> webview11;
-                                hr = webview->QueryInterface(IID_PPV_ARGS(&webview11));
-
-                                if (SUCCEEDED(hr) && webview11 != nullptr) {
-                                    LPCWSTR hostName = L"assets.namizig.com";
-
-                                    wchar_t* subFolder_wchar = nullptr;
-                                    int wideCharLen = 0;
-                                   
-                                    wideCharLen = MultiByteToWideChar(CP_UTF8, 0, settings.virtualHostName, -1, NULL, 0);
-                                    if (wideCharLen > 0) {
-                                        subFolder_wchar = new (std::nothrow) wchar_t[wideCharLen];
-                                        if (subFolder_wchar != nullptr) {
-                                            if (MultiByteToWideChar(CP_UTF8, 0, settings.virtualHostName, -1, subFolder_wchar, wideCharLen) == 0) {
-                                                delete[] subFolder_wchar;
-                                                subFolder_wchar = nullptr;
-                                                OutputDebugStringA("Failed to convert virtualHostName to wchar_t.\n");
-                                            }
-                                        } else {
-                                            OutputDebugStringA("Failed to allocate memory for subFolder_wchar.\n");
-                                        }
-                                    } else {
-                                        OutputDebugStringA("Failed to calculate length for subFolder_wchar or virtualHostName is empty.\n");
-                                    }
-                                   
-                                    if (subFolder_wchar != nullptr) {
-                                        WCHAR* exeFullDir = new (std::nothrow) WCHAR[MAX_PATH];
-                                        if (exeFullDir == nullptr) {
-                                            OutputDebugStringA("Failed to allocate memory for exePath.\n");
-                                            delete[] subFolder_wchar;
-                                            return E_OUTOFMEMORY;
-                                        }
-                                        DWORD pathActualLen = GetModuleFileNameW(NULL, exeFullDir, MAX_PATH);
-                                        if (pathActualLen == 0 || (pathActualLen == MAX_PATH && GetLastError() == ERROR_INSUFFICIENT_BUFFER)) {
-                                            delete[] exeFullDir;
-                                            delete[] subFolder_wchar;
-                                            OutputDebugStringA("Failed to get module file name.\n");
-                                            return HRESULT_FROM_WIN32(GetLastError());
-                                        }
-                                        WCHAR* lastBackslash = ::wcsrchr(exeFullDir, L'\\');
-                                        if (lastBackslash != nullptr) {
-                                            *lastBackslash = L'\0';
-                                        } else {
-                                            delete[] exeFullDir;
-                                            delete[] subFolder_wchar;
-                                            OutputDebugStringA("Failed to find backslash in module file name.\n");
-                                            return E_FAIL;
-                                        }
-                                        size_t subFolderLen = wcslen(subFolder_wchar);
-                                        size_t exeDirOnlyLen = wcslen(exeFullDir);
-                                        size_t folderPathLen = exeDirOnlyLen + 1 + subFolderLen + 1;
-                                        wchar_t* folderPath = new (std::nothrow) wchar_t[folderPathLen];
-                                        if (folderPath != nullptr) {
-                                            swprintf_s(folderPath, folderPathLen, L"%s\\%s", exeFullDir, subFolder_wchar);
-
-                                            hr = webview11->SetVirtualHostNameToFolderMapping(
-                                                hostName,
-                                                folderPath,
-                                                COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW
-                                            );
-                                            delete[] folderPath;
-
-                                            if (SUCCEEDED(hr)) {
-                                                OutputDebugStringA("Virtual host name mapping set successfully.\n");
+                                        if (uri == L"https://assets.namizig.com/main.html") {
+                                            std::string htmlTemplate;
+                                            if (settings.htmlContent != nullptr && settings.htmlContent[0] != '\0') {
+                                                htmlTemplate = settings.htmlContent;
                                             } else {
-                                                char err_buffer[256];
-                                                sprintf_s(err_buffer, sizeof(err_buffer), "Failed to set virtual host name mapping. HRESULT: 0x%lX\n", hr);
-                                                OutputDebugStringA(err_buffer);
+                                                wchar_t exePath[MAX_PATH];
+                                                GetModuleFileNameW(NULL, exePath, MAX_PATH);
+                                                PathRemoveFileSpecW(exePath);
+                                                std::wstring htmlFilePath = std::wstring(exePath) + L"\\testvirtualhost\\main.html";
+
+                                                std::ifstream htmlFile(htmlFilePath, std::ios::binary);
+                                                if (htmlFile.is_open()) {
+                                                    std::stringstream ss;
+                                                    ss << htmlFile.rdbuf();
+                                                    htmlTemplate = ss.str();
+                                                    htmlFile.close();
+                                                }
+                                        
                                             }
-                                        } else {
-                                            OutputDebugStringA("Failed to allocate memory for folder path.\n");
+                                            
+                                            std::string htmlContent = htmlTemplate;
+
+                                            const std::string start_tag = "<template ";
+                                            const std::string end_tag = "></template>";
+                                            size_t start_pos = htmlContent.find(start_tag);
+                                            if (start_pos != std::string::npos) {
+                                                size_t end_pos = htmlContent.find(end_tag, start_pos);
+                                                if (end_pos != std::string::npos) {
+                                                    size_t content_start = start_pos + start_tag.length();
+                                                    std::string content = htmlContent.substr(content_start, end_pos - content_start);
+
+                                                    size_t first_comma = content.find(',');
+                                                    size_t second_comma = content.find(',', first_comma + 1);
+                                                    
+                                                    if (first_comma != std::string::npos && second_comma != std::string::npos) {
+                                                        std::string event_type = content.substr(0, first_comma);
+                                                        std::string event_key = content.substr(first_comma + 1, second_comma - (first_comma + 1));
+
+                                                        std::string element_id;
+                                                        std::string payload_content;
+
+                                                        size_t third_comma = content.find(',', second_comma + 1);
+                                                        if (third_comma != std::string::npos) {
+                                                            element_id = content.substr(second_comma + 1, third_comma - (second_comma + 1));
+                                                            payload_content = content.substr(third_comma + 1);
+                                                        } else {
+                                                            element_id = content.substr(second_comma + 1);
+                                                        }
+
+                                                        auto trim = [](std::string& s, const char* t = " \t\n\r\f\v") {
+                                                            s.erase(0, s.find_first_not_of(t));
+                                                            s.erase(s.find_last_not_of(t) + 1);
+                                                        };
+                                                        trim(event_type, " \t\n\r\f\v");
+                                                        trim(event_key, " \t\n\r\f\v");
+                                                        trim(element_id);
+                                                        trim(payload_content, " \t\n\r\f\v");
+
+                                                        if (!event_type.empty() && !element_id.empty()) {
+                                                            if (event_type == "click") {
+                                                                std::string js_script = "<script>";
+                                                                js_script += "document.getElementById(" + element_id + ").addEventListener('" + event_type + "', () => {";
+                                                                std::string message_object = "{ command: 'buttonClick', event_key: '" + event_key + "'";
+                                                                if (!payload_content.empty()) {
+                                                                    message_object += ", payload: { " + payload_content + " }";
+                                                                }
+                                                                message_object += " }";
+
+                                                                js_script += "  const message = " + message_object + ";";
+                                                                js_script += "  window.chrome.webview.postMessage(message);";
+                                                                js_script += "  console.log('Message sent:', message);";
+                                                                js_script += "});";
+                                                                js_script += "</script>";
+
+                                                                htmlContent.replace(start_pos, (end_pos + end_tag.length()) - start_pos, js_script);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            ComPtr<IStream> stream = SHCreateMemStream(
+                                                reinterpret_cast<const BYTE*>(htmlContent.c_str()),
+                                                static_cast<UINT>(htmlContent.length())
+                                            );
+
+                                            if (stream) {
+                                                ComPtr<ICoreWebView2WebResourceResponse> response;
+                                                env->CreateWebResourceResponse(
+                                                    stream.Get(), 200, L"OK", L"Content-Type: text/html; charset=utf-8", &response
+                                                );
+                                                args->put_Response(response.Get());
+                                            }
                                         }
-                                        delete[]exeFullDir;
+                                        return S_OK;
                                     }
-                                    if (subFolder_wchar) {
-                                        delete[] subFolder_wchar;
-                                    }
-                                } else {
-                                    char err_buffer[256];
-                                    sprintf_s(err_buffer, sizeof(err_buffer), "ICoreWebView2_11 not supported. Virtual host feature unavailable. HRESULT: 0x%lX\n", hr);
-                                    OutputDebugStringA(err_buffer);
-                                }
-                            }
+                                ).Get(), &token
+                            );
                         }
-                        
+                    }
                 } else {
                     *controller = nullptr;
-                    if (FAILED(result)) {
-                        sprintf_s(buffer, sizeof(buffer), "  Callback FAILED. HRESULT: 0x%lX. *controller_out set to NULL.\n", result);
-                        OutputDebugStringA(buffer);
-                    } else {
-                         OutputDebugStringA("  Callback SUCCEEDED but ctrl is NULL. *controller_out set to NULL.\n");
-                    }
                 }
                 SetEvent(hEvent);
                 return result;
@@ -555,36 +393,38 @@ HRESULT create_webview_controller(void* environment, HWND hwnd, void** controlle
         ).Get()
     );
 
+
     final_hr = callback_hr;
     if (SUCCEEDED(hr_async_start)) {
-        DWORD wait_result;
-        for (;;) {
-            wait_result = MsgWaitForMultipleObjects(1, &hEvent, FALSE, 30000, QS_ALLINPUT);
-
-            if (wait_result == WAIT_OBJECT_0) {
-                final_hr = callback_hr;
-                break;
-            }
-
-            if (wait_result == WAIT_FAILED
-                || wait_result == WAIT_TIMEOUT) {
-                    final_hr = (wait_result == WAIT_TIMEOUT) ? HRESULT_FROM_WIN32(ERROR_TIMEOUT) : E_FAIL;
-                    OutputDebugStringA("create_webview_controller: MsgWaitForMultipleObjects timed out or failed.\n");
-                    if (*controller != nullptr) {
-                        static_cast<ICoreWebView2Controller*>(*controller)->Close();
-                        static_cast<ICoreWebView2Controller*>(*controller)->Release();
-                        *controller = nullptr;
-                    }
-                    break;
-            }
-
-            MSG msg;
-            while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-                TranslateMessage(&msg);
-                DispatchMessage(&msg);
-            }
-        }
         
+
+   DWORD wait_result;
+   for (;;) {
+    wait_result = MsgWaitForMultipleObjects(1, &hEvent, FALSE, 30000, QS_ALLINPUT);
+                        
+    if (wait_result == WAIT_OBJECT_0) {
+        final_hr = callback_hr;
+        break;
+    }
+                        
+    if (wait_result == WAIT_FAILED
+        || wait_result == WAIT_TIMEOUT) {
+        final_hr = (wait_result == WAIT_TIMEOUT) ? HRESULT_FROM_WIN32(ERROR_TIMEOUT) : E_FAIL;
+        OutputDebugStringA("create_webview_controller: MsgWaitForMultipleObjects timed out or failed.\n");
+        if (*controller != nullptr) {
+            static_cast<ICoreWebView2Controller*>(*controller)->Close();
+            static_cast<ICoreWebView2Controller*>(*controller)->Release();
+            *controller = nullptr;
+        }
+            break;
+        }
+                        
+        MSG msg;
+        while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+        }                     
     } else {
         final_hr = hr_async_start;
         *controller = nullptr;
@@ -593,7 +433,6 @@ HRESULT create_webview_controller(void* environment, HWND hwnd, void** controlle
     CloseHandle(hEvent);
 
     if (FAILED(final_hr) && *controller != nullptr) {
-        OutputDebugStringA("create_webview_controller: final_hr indicates failure, but *controller_out was set. Cleaning up.\n");
         static_cast<ICoreWebView2Controller*>(*controller)->Close();
         static_cast<ICoreWebView2Controller*>(*controller)->Release();
         *controller = nullptr;
@@ -604,9 +443,9 @@ HRESULT create_webview_controller(void* environment, HWND hwnd, void** controlle
     OutputDebugStringA(final_buffer);
 
     return final_hr;
-    #else
+#else
     return E_NOTIMPL;
-    #endif
+#endif
 }
 
 HRESULT navigate_webview(void* controller_in, const char* url_utf8) {
