@@ -1,6 +1,9 @@
 #ifndef WEBVIEW_WRAPPER_C_H
 #define WEBVIEW_WRAPPER_C_H
 
+#ifdef __cplusplus
+    #include <Windows.h>
+#endif
 #include <stdbool.h>
 typedef struct controllerSettings {
     bool contextMenu;
@@ -14,9 +17,8 @@ typedef void (*WebMessageReceivedCallback)(const char* message_json);
  
 #ifndef __cplusplus
 typedef unsigned short wchar_t;
-typedef void *HWND;
+typedef void* HWND;
 typedef long  HRESULT;
-typedef unsigned long ULONG;
 
 typedef struct tagRECT {
     long left;
@@ -24,10 +26,6 @@ typedef struct tagRECT {
     long right;
     long bottom;
 } RECT;
-#define S_OK      ((HRESULT)0L)
-#define E_POINTER ((HRESULT)0x80004003L)
-#else
-#include <windows.h>
 #endif // !__cplusplus
 
 #ifdef WEBVIEW_WRAPPER_EXPORTS
@@ -41,12 +39,13 @@ typedef struct tagRECT {
 extern "C" {
 #endif
 
-HRESULT create_webview_environment(void **environment);
-HRESULT create_webview_controller (void *environment, HWND hwnd, void **controller, controllerSettings settings);
-HRESULT navigate_webview          (void *controller,  const char *url);
-void    resize_webview            (void *controller,  RECT bounds);
-void     cleanup_webview           (void *controller,  void *environment);
-HRESULT register_web_message_handler(void *controller, WebMessageReceivedCallback callback);
+WEBVIEW_API HRESULT create_webview_environment(void **environment);
+WEBVIEW_API HRESULT create_webview_controller (void *environment, HWND hwnd, void **controller, controllerSettings settings);
+WEBVIEW_API HRESULT navigate_webview          (void *controller,  const char *url);
+WEBVIEW_API void    resize_webview            (void *controller,  RECT bounds);
+WEBVIEW_API void     cleanup_webview           (void *controller,  void *environment);
+WEBVIEW_API HRESULT register_web_message_handler(void *controller, WebMessageReceivedCallback callback);
+WEBVIEW_API HRESULT execute_script            (void *controller,  const char *script);
 WEBVIEW_API HRESULT __stdcall wrapper_SetWindowTheme(HWND hwnd, const wchar_t *pszSubAppName, const wchar_t *pszSubIdList);
 
 extern const unsigned int WRAPPER_TBN_DROPDOWN;

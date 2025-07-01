@@ -4,17 +4,7 @@
 #if defined(_M_AMD64) && !defined(_AMD64_)
 #define _AMD64_
 #endif
-
-#ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-/* #include <intsafe.h>
-#include <strsafe.h>
-#include <synchapi.h>
-#include <winbase.h>
-#include <winerror.h>
-#include <winnt.h>
-#include <winuser.h> */
-#endif
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
 #include <string>
@@ -68,6 +58,7 @@ extern "C" {
     void resize_webview(void* controller_in, RECT bounds);
     void cleanup_webview(void* controller, void* environment);
     HRESULT register_web_message_handler(void* controller, WebMessageReceivedCallback callback);
+    HRESULT execute_script(void* controller, const char* script);
 
     HRESULT __stdcall wrapper_SetWindowTheme(HWND hwnd, const wchar_t *pszSubAppName, const wchar_t *pszSubIdList);
 
@@ -126,6 +117,43 @@ HRESULT register_web_message_handler(void* controller_in, WebMessageReceivedCall
     return E_NOTIMPL;
 #endif
 }
+
+HRESULT execute_script(void* controller_in, const char* script) {
+    if (controller_in == nullptr || script == nullptr) {
+        return E_POINTER;
+    }
+
+    #ifdef __cplusplus
+        ICoreWebView2Controller* controller = static_cast<ICoreWebView2Controller*>(controller_in);
+        ComPtr<ICoreWebView2> webview;
+        HRESULT hr = controller->get_CoreWebView2(&webview);
+
+        if (SUCCEEDED(hr) && webview != nullptr) {
+            int wide_char_len = MultiByteToWideChar(CP_UTF8, 0, script, -1, NULL, 0);
+
+            if (wide_char_len <= 0) {
+                return HRESULT_FROM_WIN32(GetLastError());
+            }
+            wchar_t* wide_script = new (std::nothrow) wchar_t[wide_char_len];
+            if (wide_script == nullptr) {
+                return E_OUTOFMEMORY;
+            }
+
+            if (MultiByteToWideChar(CP_UTF8, 0, script, -1, wide_script, wide_char_len) == 0) {
+                delete[] wide_script;
+                return HRESULT_FROM_WIN32(GetLastError());
+            }
+
+            hr = webview->ExecuteScript(wide_script, nullptr);
+            delete[] wide_script;
+        } else if (SUCCEEDED(hr) && webview == nullptr) {
+            return E_FAIL;
+        }
+        return hr;
+    #else
+        return E_NOTIMPL;
+    #endif
+        }
 
 #pragma comment(lib, "uxtheme.lib")
 HRESULT __stdcall wrapper_SetWindowTheme(HWND hwnd, const wchar_t *pszSubAppName, const wchar_t *pszSubIdList) {

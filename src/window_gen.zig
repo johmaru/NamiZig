@@ -27,6 +27,7 @@ const DRAWITEMSTRUCT = extern struct {
     itemData: usize,
 };
 
+pub const HWND = win32.foundation.HWND;
 const S_OK: c.HRESULT = 0;
 const ODT_MENU: u32 = 1;
 const WM_WEB_MESSAGE = win32.ui.windows_and_messaging.WM_APP + 2;
@@ -39,6 +40,11 @@ var g_hToolbar: ?win32.foundation.HWND = null;
 var g_hMenuFile: ?win32.ui.windows_and_messaging.HMENU = null;
 var g_language_strings: lang.language_controller = undefined;
 var g_html_content_buffer_for_virtual_host: ?[]u8 = null;
+
+pub const WebMessageHandler = *const fn (hwnd: win32.foundation.HWND, message: std.json.Value) void;
+
+var g_web_message_handlers: std.StringHashMap(WebMessageHandler) = undefined;
+var g_web_message_handler_allocator: std.mem.Allocator = undefined;
 
 // global text definitions
 var g_text_file_button: [:0]const u16 = undefined;
@@ -70,8 +76,16 @@ fn webMessageReceived(message_json: [*c]const u8) callconv(.C) void {
 
 }
 
+/// Initializes the window generation library with the given settings.
+///
+/// # Important
+/// On Windows, the caller is responsible for initializing COM (e.g., by calling `CoInitializeEx`)
+/// on the thread that will call `run()` before calling this function.
 pub fn init(settings: *setting.WindowSettings) !void {
     const os_tag = builtin.os.tag;
+
+    g_web_message_handler_allocator = std.heap.page_allocator;
+    g_web_message_handlers = std.StringHashMap(WebMessageHandler).init(g_web_message_handler_allocator);
 
     switch (os_tag) {
         .windows => {
@@ -80,7 +94,6 @@ pub fn init(settings: *setting.WindowSettings) !void {
                 std.heap.page_allocator,
                 settings.language,
             );
-            try win32_init(settings);
         },
         .linux => {
             return error.WIP;
@@ -92,7 +105,7 @@ pub fn init(settings: *setting.WindowSettings) !void {
 }
 
 const win32 = @import("win32");
-fn win32_init(settings: *setting.WindowSettings) !void {
+fn runWin32(settings: *setting.WindowSettings) !void {
 
     const WNDCLASSW = win32.ui.windows_and_messaging.WNDCLASSW;
     const MSG = win32.ui.windows_and_messaging.MSG;
@@ -215,6 +228,24 @@ fn win32_init(settings: *setting.WindowSettings) !void {
         _ = win32.ui.windows_and_messaging.TranslateMessage(&msg);
         _ = win32.ui.windows_and_messaging.DispatchMessageW(&msg);
     }
+}
+
+pub fn run() !void {
+    const os_tag = builtin.os.tag;
+    switch (os_tag) {
+        .windows => {
+           try runWin32(g_settings);
+        },
+        .linux => return error.WIP,
+        else => {
+            return error.UnsupportedOS;
+            }
+        }
+
+}
+
+pub fn registerWebMessageHandler(event_key: []const u8, handler: WebMessageHandler) !void {
+    try g_web_message_handlers.put(event_key, handler);
 }
 
 const CREATE_WEBVIEW_MSG: u32 = win32.ui.windows_and_messaging.WM_APP + 1;
@@ -350,6 +381,7 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                     g_hMenuFile = null;
                     return -1;
                 };  
+                defer std.heap.page_allocator.free(std.mem.sliceAsBytes(@as([]const u16, exit_menu_text_utf16)));
 
                 if (win32.ui.windows_and_messaging.AppendMenuW(
                     g_hMenuFile.?,
@@ -405,6 +437,9 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                     std.debug.print("WM_DRAWITEM: utf8ToUtf16LeAllocZ failed: {any}\n", .{err});
                     return win32.ui.windows_and_messaging.DefWindowProcW(hwnd, msg, wParam, lParam);
                 };
+
+                defer text_alloc.free(std.mem.sliceAsBytes(@as([]const u16, text_utf16_z)));
+
                 var text_rect = pDrawItem.rcItem;
                 _ = win32.graphics.gdi.DrawTextW(
                     pDrawItem.hDC, 
@@ -585,15 +620,15 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
             defer parsed.deinit();
 
             const message_obj = parsed.value.object;
-            if (std.mem.eql(u8, message_obj.get("command").?.string, "buttonClick") and std.mem.eql(u8, message_obj.get("event_key").?.string,"exitAPP")) {
-                std.debug.print("WM_WEB_MESSAGE: Click event for exitAPP received. Exiting application.\n", .{});
-                _ = win32.ui.windows_and_messaging.DestroyWindow(hwnd);
-                return 0;
-            } else if (std.mem.eql(u8, message_obj.get("command").?.string, "buttonClick") and std.mem.eql(u8, message_obj.get("event_key").?.string,"sendMessageToZig")) {
-                const timestamp = message_obj.get("payload").?.string;
-                std.debug.print("WM_WEB_MESSAGE: Click event for sendMessageToZig received with timestamp: {s}\n", .{timestamp});
-            } else {
-                std.debug.print("WM_WEB_MESSAGE: Unhandled command or event_key in message: {s}\n", .{message_slice});       
+            if (message_obj.get("event_key")) |event_key_val| {
+                if (event_key_val.string.len > 0)  {
+                    const event_key = event_key_val.string;
+                    if (g_web_message_handlers.get(event_key)) |handler| {
+                        handler(hwnd, parsed.value);
+                    } else {
+                        std.debug.print("WM_WEB_MESSAGE: Unhandled event key: {s}\n", .{event_key});
+                    }
+                }
             }
 
             return 0;
@@ -620,13 +655,17 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
 
             // cleanup toolbar text
             if (g_text_file_button.len > 0) {
-                std.heap.page_allocator.free(g_text_file_button);
+                const slice_u16: []const u16 = g_text_file_button;
+                std.heap.page_allocator.free(std.mem.sliceAsBytes(slice_u16));
+                g_text_file_button = undefined;
             }
 
             if (g_html_content_buffer_for_virtual_host) |buffer| {
                 std.heap.page_allocator.free(buffer);
                 g_html_content_buffer_for_virtual_host = null;
             }
+
+            g_web_message_handlers.deinit();
 
             // cleanup language controller
             g_language_strings.deinit();
@@ -683,9 +722,9 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                                 hwnd,
                                 null,
                             );
-                            return 0;
                         }
                     }
+                    return 0;
         } else {
             std.debug.print("WM_NOTIFY: Unhandled notification code: {}\n", .{pnmh.code});
         }
