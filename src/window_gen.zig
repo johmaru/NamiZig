@@ -27,6 +27,9 @@ const DRAWITEMSTRUCT = extern struct {
     itemData: usize,
 };
 
+pub const c_Controller_settings = c.controllerSettings;
+
+pub const COINIT = win32.system.com.COINIT_APARTMENTTHREADED;
 pub const HWND = win32.foundation.HWND;
 const S_OK: c.HRESULT = 0;
 const ODT_MENU: u32 = 1;
@@ -242,6 +245,10 @@ pub fn run() !void {
             }
         }
 
+}
+
+pub fn RGB(r: u8, g: u8, b: u8) !u32 {
+    return @as(u32, r) | (@as(u32, g) << 8) | (@as(u32, b) << 16);
 }
 
 pub fn registerWebMessageHandler(event_key: []const u8, handler: WebMessageHandler) !void {
@@ -689,8 +696,11 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
                             return win32.ui.controls.CDRF_NOTIFYITEMDRAW;
                         },
                         win32.ui.controls.CDDS_ITEMPREPAINT => {
+                            const item_state = pcd.nmcd.uItemState;
+                            if ((item_state & win32.ui.controls.CDIS_HOT) != 0 or (item_state & win32.ui.controls.CDIS_SELECTED) != 0) {
+                                pcd.clrBtnFace = g_settings.theme_settings.toolbar_button_color;
+                            }
                             pcd.clrText = g_settings.theme_settings.toolbar_button_text_color;
-                            pcd.clrBtnFace = g_settings.theme_settings.toolbar_button_color;
                             return win32.ui.controls.CDRF_NEWFONT;
                         },
                         else => {}

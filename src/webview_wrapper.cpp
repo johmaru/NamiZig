@@ -336,61 +336,71 @@ HRESULT create_webview_controller(void* environment, HWND hwnd, void** controlle
 
                                             const std::string start_tag = "<template ";
                                             const std::string end_tag = "></template>";
-                                            size_t start_pos = htmlContent.find(start_tag);
-                                            if (start_pos != std::string::npos) {
+                                            size_t search_pos = 0;
+                                            size_t start_pos;
+                                            while ((start_pos = htmlContent.find(start_tag, search_pos)) != std::string::npos) {
                                                 size_t end_pos = htmlContent.find(end_tag, start_pos);
-                                                if (end_pos != std::string::npos) {
-                                                    size_t content_start = start_pos + start_tag.length();
-                                                    std::string content = htmlContent.substr(content_start, end_pos - content_start);
+                                                if (end_pos == std::string::npos) {
 
-                                                    size_t first_comma = content.find(',');
-                                                    size_t second_comma = content.find(',', first_comma + 1);
-                                                    
-                                                    if (first_comma != std::string::npos && second_comma != std::string::npos) {
-                                                        std::string event_type = content.substr(0, first_comma);
-                                                        std::string event_key = content.substr(first_comma + 1, second_comma - (first_comma + 1));
+                                                    search_pos = start_pos + start_tag.length();
+                                                    continue;
+                                                }
 
-                                                        std::string element_id;
-                                                        std::string payload_content;
+                                                size_t content_start = start_pos + start_tag.length();
+                                                std::string content = htmlContent.substr(content_start, end_pos - content_start);
 
-                                                        size_t third_comma = content.find(',', second_comma + 1);
-                                                        if (third_comma != std::string::npos) {
-                                                            element_id = content.substr(second_comma + 1, third_comma - (second_comma + 1));
-                                                            payload_content = content.substr(third_comma + 1);
-                                                        } else {
-                                                            element_id = content.substr(second_comma + 1);
-                                                        }
+                                                size_t first_comma = content.find(',');
+                                                size_t second_comma = content.find(',', first_comma + 1);
+                                                
+                                                if (first_comma != std::string::npos && second_comma != std::string::npos) {
+                                                    std::string event_type = content.substr(0, first_comma);
+                                                    std::string event_key = content.substr(first_comma + 1, second_comma - (first_comma + 1));
 
-                                                        auto trim = [](std::string& s, const char* t = " \t\n\r\f\v") {
-                                                            s.erase(0, s.find_first_not_of(t));
-                                                            s.erase(s.find_last_not_of(t) + 1);
-                                                        };
-                                                        trim(event_type, " \t\n\r\f\v");
-                                                        trim(event_key, " \t\n\r\f\v");
-                                                        trim(element_id);
-                                                        trim(payload_content, " \t\n\r\f\v");
+                                                    std::string element_id;
+                                                    std::string payload_content;
 
-                                                        if (!event_type.empty() && !element_id.empty()) {
-                                                            if (event_type == "click") {
-                                                                std::string js_script = "<script>";
-                                                                js_script += "document.getElementById(" + element_id + ").addEventListener('" + event_type + "', () => {";
-                                                                std::string message_object = "{ command: 'buttonClick', event_key: '" + event_key + "'";
-                                                                if (!payload_content.empty()) {
-                                                                    message_object += ", payload: { " + payload_content + " }";
-                                                                }
-                                                                message_object += " }";
+                                                    size_t third_comma = content.find(',', second_comma + 1);
+                                                    if (third_comma != std::string::npos) {
+                                                        element_id = content.substr(second_comma + 1, third_comma - (second_comma + 1));
+                                                        payload_content = content.substr(third_comma + 1);
+                                                    } else {
+                                                        element_id = content.substr(second_comma + 1);
+                                                    }
 
-                                                                js_script += "  const message = " + message_object + ";";
-                                                                js_script += "  window.chrome.webview.postMessage(message);";
-                                                                js_script += "  console.log('Message sent:', message);";
-                                                                js_script += "});";
-                                                                js_script += "</script>";
+                                                    auto trim = [](std::string& s, const char* t = " \t\n\r\f\v") {
+                                                        s.erase(0, s.find_first_not_of(t));
+                                                        s.erase(s.find_last_not_of(t) + 1);
+                                                    };
+                                                    trim(event_type, " \t\n\r\f\v");
+                                                    trim(event_key, " \t\n\r\f\v");
+                                                    trim(element_id);
+                                                    trim(payload_content, " \t\n\r\f\v");
 
-                                                                htmlContent.replace(start_pos, (end_pos + end_tag.length()) - start_pos, js_script);
+                                                    if (!event_type.empty() && !element_id.empty()) {
+                                                        if (event_type == "click") {
+                                                            std::string js_script = "<script>";
+                                                            js_script += "document.getElementById(" + element_id + ").addEventListener('" + event_type + "', () => {";
+                                                            std::string message_object = "{ command: 'buttonClick', event_key: '" + event_key + "'";
+                                                            if (!payload_content.empty()) {
+                                                                message_object += ", payload: { " + payload_content + " }";
                                                             }
+                                                            message_object += " }";
+
+                                                            js_script += "  const message = " + message_object + ";";
+                                                            js_script += "  window.chrome.webview.postMessage(message);";
+                                                            js_script += "  console.log('Message sent:', message);";
+                                                            js_script += "});";
+                                                            js_script += "</script>";
+
+                                                            htmlContent.replace(start_pos, (end_pos + end_tag.length()) - start_pos, js_script);
+                                                            
+                                                            search_pos = start_pos + js_script.length();
+                                                            continue; 
                                                         }
                                                     }
                                                 }
+                                                // パースに失敗した場合、このタグをスキップして次に進む
+                                                search_pos = start_pos + start_tag.length();
                                             }
 
                                             ComPtr<IStream> stream = SHCreateMemStream(
