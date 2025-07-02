@@ -22,14 +22,14 @@ pub fn main() !void {
         };
 
         // if you need change settings, Can
-        var win_settings = settings.WindowSettings{
+        var win_settings = nami_settings.WindowSettings{
             .webview_controller_settings = webViewConttollerSettings,
-            .theme_settings = settings.ThemeSettings{
+            .theme_settings = nami_settings.ThemeSettings{
                 .toolbar_background_color = try window_gen.RGB(0, 0, 0),
                 .toolbar_button_color = try window_gen.RGB(128, 128, 128),
                 .toolbar_button_text_color = try window_gen.RGB(255, 255, 255),
             },
-            .language = lang.language_controller.languages.ja,
+            .language = nami_lang.language_controller.languages.ja,
             .toolbar = true,
         };
 
@@ -46,10 +46,6 @@ pub fn main() !void {
     }
 }
 
-fn toWideString(allocator: std.mem.Allocator, str: []const u8) ![:0]u16 {
-    return try std.unicode.utf8ToUtf16LeAllocZ(allocator, str);
-}
-
 // Custom EventHandler
 fn handleAppExit(hwnd: window_gen.HWND, message: std.json.Value) void {
     _ = message;
@@ -62,26 +58,24 @@ fn callName(hwnd: window_gen.HWND, message: std.json.Value) void {
     _ = message;
 
     const allocator = std.heap.page_allocator;
+
     const text = std.fmt.allocPrint(allocator, "You Are {s}", .{name}) catch return;
     defer allocator.free(text);
 
-    const title_w = toWideString(allocator, "Message from Zig") catch return;
-    defer allocator.free(std.mem.sliceAsBytes(@as([]const u16, title_w)));
+    var message_box_settings = nami_control.Control.Message_box_struct{
+        .lpText = text,
+        .lpCaption = "Test",
+        .uType = nami_control.Control.WINDOWS_MESSAGING.MB_OK,
+    };
 
-    const text_w = toWideString(allocator, text) catch return;
-    defer allocator.free(std.mem.sliceAsBytes(@as([]const u16, text_w)));
-
-    _ = win32.ui.windows_and_messaging.MessageBoxW(
-        hwnd,
-        text_w.ptr,
-        title_w.ptr,
-        win32.ui.windows_and_messaging.MB_OK,
-    );
+    try nami_control.Control.message_box(allocator, &message_box_settings,hwnd);
+    
 }
 
 const std = @import("std");
 const window_gen = @import("window_gen.zig");
 const win32 = @import("win32");
 const builtin = @import("builtin");
-const settings = @import("setting.zig");
-const lang = @import("lang.zig");
+const nami_settings = @import("setting.zig");
+const nami_lang = @import("lang.zig");
+const nami_control = @import("control.zig");
