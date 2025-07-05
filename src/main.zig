@@ -12,6 +12,11 @@ pub fn main() !void {
         // Absolutelly require COM Uninitialize exit a main function
         defer win32.system.com.CoUninitialize();
 
+        const allocator = std.heap.page_allocator;
+
+        var window_manager  = try window_gen.WindowGen.WindowManager.init(allocator);
+        defer window_manager.deinit();
+
         // Can use some word
         const virtualHostName= "testvirtualhost";
 
@@ -19,6 +24,7 @@ pub fn main() !void {
             .contextMenu = false,
             .isVirtualHost = true,
             .virtualHostName = virtualHostName,
+            .htmlContent = null
         };
 
         // if you need change settings, Can
@@ -33,28 +39,28 @@ pub fn main() !void {
             .toolbar = true,
         };
 
-        // First,Require initialize the window
-        try window_gen.init(&win_settings);
+        const window = try window_manager.createWindow(&win_settings);
 
-        // After initialized the window,Can register event handler
-        try window_gen.registerWebMessageHandler("exitAPP", handleAppExit);
+        try window.registerWebMessageHandler("exitAPP", handleAppExit);
+        try window.registerWebMessageHandler("showName", callName);
+        try window.registerWebMessageHandler("nav_google", navGoogle);
 
-        try window_gen.registerWebMessageHandler("showName", callName);
+        try window.show();
 
-        // Run the window(Once window_gen.run() is called, you can no longer register event handlers)
-        try window_gen.run();
+       try window.messageLoop();
+        
     }
 }
 
 // Custom EventHandler
-fn handleAppExit(hwnd: window_gen.HWND, message: std.json.Value) void {
+fn handleAppExit(hwnd: window_gen.HWND, message: std.json.Value) !void {
     _ = message;
 
     _ = win32.ui.windows_and_messaging.DestroyWindow(hwnd);
 }
 
 const name = "Johmaru";
-fn callName(hwnd: window_gen.HWND, message: std.json.Value) void {
+fn callName(hwnd: window_gen.HWND, message: std.json.Value) !void {
     _ = message;
 
     const allocator = std.heap.page_allocator;
@@ -70,6 +76,17 @@ fn callName(hwnd: window_gen.HWND, message: std.json.Value) void {
 
     try nami_control.Control.message_box(allocator, &message_box_settings,hwnd);
     
+}
+
+fn navGoogle(hwnd: window_gen.HWND, message: std.json.Value) !void {
+
+    _ = message;
+
+
+    const window = try window_gen.WindowGen.g_window_manager.?.get(hwnd);
+
+    try window.navigate("https://www.google.com");
+
 }
 
 const std = @import("std");

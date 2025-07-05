@@ -11,7 +11,6 @@ pub const WindowSettings = struct {
     resizable: bool = true,
     fullscreen: bool = false,
     navigatge_to: ?[:0] const u8 = null,
-    VirtualHostName: [:0] const u8 = "NamiZig",
     toolbar: bool = true,
     theme_settings: ThemeSettings = ThemeSettings{},
     language: lang.language_controller.languages = lang.language_controller.languages.en,
@@ -22,7 +21,6 @@ pub const WindowSettings = struct {
     webview_controller_settings: c.controllerSettings,
 };
 
-// Default position is set to CW_USEDEFAULT, which is a special value that tells Windows to choose the default position. 
 pub const WindowStartPostionSettings = struct {
     x: i32 = win32.ui.windows_and_messaging.CW_USEDEFAULT,
     y: i32 = win32.ui.windows_and_messaging.CW_USEDEFAULT,
