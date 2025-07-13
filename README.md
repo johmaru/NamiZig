@@ -13,6 +13,8 @@ So now only supported windows x64 msvc environment.
 
 3. Windows KIT(if windows kit path not default, you can change the windows kit path in the main.zig)
 
+4. Clangd(Visual Studio Code Extension)
+
 # compile rule
 
 - ```mkdir build && cd build```
@@ -20,6 +22,8 @@ So now only supported windows x64 msvc environment.
 - ```cmake ..```
 
 - ```cmake --build . --target run```
+
+- change your path for build.zig and compile_commands.json
 
 # [WIP] Tutorial
 
