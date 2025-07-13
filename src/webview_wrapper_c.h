@@ -1,9 +1,11 @@
 #ifndef WEBVIEW_WRAPPER_C_H
 #define WEBVIEW_WRAPPER_C_H
 
+#ifdef __cplusplus
+#include <WebView2.h>
+#endif
 
 typedef void* HWND_HANDLE;
-
 
 #ifndef __cplusplus
     typedef long HRESULT;
