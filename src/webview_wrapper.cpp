@@ -23,9 +23,6 @@
 #include <wrl/client.h>
 #include <wrl/event.h>
 
-#include <WebView2EnvironmentOptions.h>
-#include <WebView2.h>
-
 #pragma comment(lib, "shlwapi.lib")
 
 #define WEBVIEW_WRAPPER_EXPORTS
@@ -100,25 +97,24 @@ HRESULT register_web_message_handler(void* controller_in, WebMessageReceivedCall
                     ~CoTaskMemFreer() { if (p) CoTaskMemFree(p); }
                 } freer = { message_ws };
 
-                const char* utf8_message_to_pass = nullptr;
+                char* utf8_buffer = nullptr;
                 if (message_ws != nullptr && *message_ws != L'\0') {
                     int utf8_length = WideCharToMultiByte(CP_UTF8, 0, message_ws, -1, NULL, 0, NULL, NULL);
                     if (utf8_length > 0) {
 
-                        char* utf8_buffer = static_cast<char*>(CoTaskMemAlloc(utf8_length));
+                        utf8_buffer = static_cast<char*>(CoTaskMemAlloc(utf8_length));
                         if (utf8_buffer != nullptr) {
                             WideCharToMultiByte(CP_UTF8, 0, message_ws, -1, utf8_buffer, utf8_length, NULL, NULL);
-                            utf8_message_to_pass = utf8_buffer;
                             }
                         }
                     }
 
                 char debug_buffer[256];
-                sprintf_s(debug_buffer, "C++: About to call Zig callback g_webMessageCallback with HWND=%p, message_ptr=%p\n", hwnd, utf8_message_to_pass);
+                sprintf_s(debug_buffer, "C++: About to call Zig callback g_webMessageCallback with HWND=%p, message_ptr=%p\n", hwnd, utf8_buffer);
                 OutputDebugStringA(debug_buffer);
 
-                g_webMessageCallback(static_cast<HWND_HANDLE>(hwnd), utf8_message_to_pass);
-
+                g_webMessageCallback(static_cast<HWND_HANDLE>(hwnd), utf8_buffer);
+                if (utf8_buffer) CoTaskMemFree(utf8_buffer);
                 OutputDebugStringA("C++: Zig callback g_webMessageCallback returned.\n");
                 return S_OK;
             }
