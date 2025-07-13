@@ -1,4 +1,4 @@
-
+// Now this an fuction exist as a TestRunner(So bad structure btw).
 pub fn main() !void {
     if (builtin.os.tag == .windows) {
         
@@ -27,7 +27,7 @@ pub fn main() !void {
             .htmlContent = null
         };
 
-        // if you need change settings, Can
+        // if you need change settings, Can do
         var win_settings = nami_settings.WindowSettings{
             .webview_controller_settings = webViewConttollerSettings,
             .theme_settings = nami_settings.ThemeSettings{
@@ -46,6 +46,24 @@ pub fn main() !void {
         try window.registerWebMessageHandler("nav_google", navGoogle);
 
         try window.show();
+
+        // To the child window will start new window.
+        var child_settings = win_settings;
+
+        // Navigates to main.html if isVirtualHost is not null.
+        child_settings.webview_controller_settings.isVirtualHost = false;
+        child_settings.webview_controller_settings.virtualHostName = null;
+
+        // To create a popup window, set window_style.POPUP to 1.
+        child_settings.window_style.POPUP = 1;
+
+        // Examlple,child go to google.com.
+        child_settings.navigatge_to = "https://www.google.com";
+
+
+       const child = try  window_manager.createChildWindow(window.hwnd.?, &child_settings);
+
+       try child.show();
 
        try window.messageLoop();
         

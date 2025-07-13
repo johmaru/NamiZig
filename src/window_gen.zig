@@ -59,6 +59,11 @@ const DRAWITEMSTRUCT = extern struct {
     html_content_buffer_for_virtual_host: ?[]u8 = null,
     init_navigate_to: ?[:0]const u8 = null,
 
+    //Variables that manage windows
+    parent: ?*WindowGen = null,
+    children: std.AutoHashMap(HWND, *WindowGen) = undefined,
+
+
 
     web_message_handlers: std.StringHashMap(WebMessageHandler) = undefined,
     web_message_handler_allocator: std.mem.Allocator = undefined,
@@ -180,6 +185,8 @@ pub const WindowManager = struct {
         errdefer self.allocator.destroy(window);
 
         window.* = .{
+            .parent = null,
+            .children = undefined,
             .allocator = undefined,
             .hwnd = null,
             .webview_environment = null,
@@ -202,6 +209,64 @@ pub const WindowManager = struct {
         return window;
     }
 
+    pub fn destroyWindow(self: *WindowManager, hwnd: HWND) !void {
+        if (self.windows.get(hwnd)) |window_instance| {
+
+            if (window_instance.webview_controller) |controller| {
+                c.cleanup_webview(controller, null);
+            }
+
+            _ = win32.ui.windows_and_messaging.DestroyWindow(hwnd);
+            _ = win32.ui.windows_and_messaging.PostQuitMessage(0);
+            self.windows.remove(hwnd);
+            return;
+        }
+    }
+
+    /// Creates a child window.
+    /// This function ensures the window is correctly configured as a child by setting
+    /// the parent HWND and adding the WS_CHILD style.
+    /// NOTE: This function will modify the `hWndParent` and `window_style` fields of the provided `settings` object.
+    pub fn createChildWindow(self: *WindowManager, parent: HWND, settings: *setting.WindowSettings) !*WindowGen {
+        const parent_window = self.windows.get(parent) orelse {
+            return error.ParentNotFound;
+        };
+
+        const window = try self.allocator.create(WindowGen);
+        errdefer self.allocator.destroy(window);
+
+        settings.create_window_settings.hWndParent = parent;
+
+        // ! This is Side Effect
+        settings.window_style.CHILD = 1;
+
+
+        window.* = .{
+            .parent = parent_window,
+            .children = undefined,
+            .allocator = undefined,
+            .hwnd = null,
+            .webview_environment = null,
+            .webview_controller = null,
+            .settings = undefined,
+            .hToolbar = null,
+            .hMenuFile = null,
+            .language_strings = undefined,
+            .html_content_buffer_for_virtual_host = null,
+            .init_navigate_to = null,
+            .web_message_handlers = undefined,
+            .web_message_handler_allocator = undefined,
+            .text_file_button = undefined,
+        };
+
+        try window.init(self.allocator, settings);
+
+        try createWin32Window(window);
+
+        return window;
+        
+    }
+
     pub fn get(self: *WindowManager, hwnd: HWND) !*WindowGen {
         return self.windows.get(hwnd).?;
     }
@@ -214,6 +279,7 @@ pub fn init(self: *Self, allocator: std.mem.Allocator, settings: *setting.Window
     self.settings = settings;
     self.web_message_handlers = std.StringHashMap(WebMessageHandler).init(allocator);
     self.language_strings = try lang.language_controller.init(allocator, settings.language);
+    self.children = std.AutoHashMap(HWND, *WindowGen).init(allocator);
 }
 
 pub fn deinit(self: *Self) void {
@@ -286,7 +352,11 @@ fn createWin32Window(window: *WindowGen) !void {
     };
 
     if (win32.ui.windows_and_messaging.RegisterClassW(&wc) == 0) {
-        return error.WindowRegistrationFailed;
+        const last_error = win32.foundation.GetLastError();
+        if (last_error != win32.foundation.ERROR_CLASS_ALREADY_EXISTS) {
+            std.debug.print("Window registration failed with unexpected error code: {}\n", .{last_error});
+            return error.WindowRegistrationFailed;
+        }
     }
 
     var window_style: win32.ui.windows_and_messaging.WINDOW_STYLE = undefined;
@@ -372,6 +442,10 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
             const create_struct: *const win32.ui.windows_and_messaging.CREATESTRUCTW = @ptrFromInt(@as(usize, @bitCast(lParam)));
             const window_instance: *WindowGen = @alignCast(@ptrCast(create_struct.lpCreateParams.?));
             window_instance.hwnd = hwnd;
+
+            if (window_instance.parent) |parent_window| {
+                parent_window.children.put(hwnd, window_instance) catch |err| std.debug.print("Failed to add child window to parent`s children Erorr : {any}\n", .{err});
+            }
             
             _ = win32.ui.windows_and_messaging.SetWindowLongPtrW(hwnd, win32.ui.windows_and_messaging.GWLP_USERDATA, @intCast(@intFromPtr(window_instance)));
 
@@ -772,6 +846,10 @@ fn windowProc(hwnd: win32.foundation.HWND, msg: u32, wParam: win32.foundation.WP
             if (window_instance.html_content_buffer_for_virtual_host) |buffer| {
                 window_instance.allocator.free(buffer);
                 window_instance.html_content_buffer_for_virtual_host = null;
+            }
+
+            if (window_instance.parent) |parent_window| {
+                _ = parent_window.children.remove(hwnd);
             }
 
             if (g_window_manager.?.windows.fetchRemove(hwnd)) |removed| {
