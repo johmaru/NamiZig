@@ -52,18 +52,15 @@ ZIG Back End(if initialize project on NamiZig CLI)
 
 
 
+// Now this an fuction exist as a TestRunner(So bad structure btw).
 pub fn main() !void {
     if (builtin.os.tag == .windows) {
         
         // Absolutelly require COM Initialize
-        const hr = win32.system.com.CoInitializeEx(null, window_gen.COINIT);
-        if (hr != win32.foundation.S_OK and hr != win32.foundation.S_FALSE) {
-            std.debug.print("CoInitializeEx failed. HRESULT: 0x{X:0>8}\n", .{hr});
-            return error.CoInitializeFailed;
-        }
+        try window_gen.COMInitialize();
 
         // Absolutelly require COM Uninitialize exit a main function
-        defer win32.system.com.CoUninitialize();
+        defer window_gen.COMUninitialize();
 
         const allocator = std.heap.page_allocator;
 
@@ -81,6 +78,7 @@ pub fn main() !void {
         };
 
         // if you need change settings, Can do
+        // pub function in the setting.zig GetMainScreenCenterPos,Which is start postion the window  as MainScreen for center.
         var win_settings = nami_settings.WindowSettings{
             .webview_controller_settings = webViewConttollerSettings,
             .theme_settings = nami_settings.ThemeSettings{
@@ -90,6 +88,7 @@ pub fn main() !void {
             },
             .language = nami_lang.language_controller.languages.ja,
             .toolbar = true,
+            .start_position = try nami_settings.GetMainScreenCenterPos(800, 600),
         };
 
         const window = try window_manager.createWindow(&win_settings);
