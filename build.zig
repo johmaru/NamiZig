@@ -47,7 +47,7 @@ pub fn build(b: *std.Build) void {
     lib.linkSystemLibrary("c");
     lib.addIncludePath(b.path("webview/include"));
     lib.addLibraryPath(b.path("webview/x64"));
-    lib.addIncludePath(b.path("wil/include/wil"));
+    lib.addIncludePath(b.path("latest_wil/include/wil"));
     lib.addSystemIncludePath(.{ .cwd_relative = "C:/Program Files (x86)/Windows Kits/10/Include/10.0.22621.0/um" });
     lib.addSystemIncludePath(.{ .cwd_relative = "C:/Program Files (x86)/Windows Kits/10/Include/10.0.22621.0/winrt" });
     lib.addSystemIncludePath(.{ .cwd_relative = "C:/Program Files (x86)/Windows Kits/10/Include/10.0.22621.0/shared" });
@@ -83,7 +83,7 @@ pub fn build(b: *std.Build) void {
 
     exe.addIncludePath(b.path("src"));
     exe.addIncludePath(b.path("webview/include"));
-    exe.addIncludePath(b.path("wil/include/wil"));
+    exe.addIncludePath(b.path("latest_wil/include/wil"));
 
     exe.addLibraryPath(.{ .cwd_relative = "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/lib/x64" });
     exe.addLibraryPath(.{ .cwd_relative = "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.22621.0/um/x64" });

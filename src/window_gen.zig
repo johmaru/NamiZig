@@ -20,6 +20,18 @@ pub fn RGB(r: u8, g: u8, b: u8) !u32 {
     return @as(u32, r) | (@as(u32, g) << 8) | (@as(u32, b) << 16);
 }
 
+pub fn COMInitialize() !void {
+    const hr = win32.system.com.CoInitializeEx(null, COINIT);
+        if (hr != win32.foundation.S_OK and hr != win32.foundation.S_FALSE) {
+            std.debug.print("CoInitializeEx failed. HRESULT: 0x{X:0>8}\n", .{hr});
+            return error.CoInitializeFailed;
+        }
+}
+
+pub fn COMUninitialize() void {
+   win32.system.com.CoUninitialize();
+}
+
 
 pub const WindowGen = struct {
 
@@ -373,8 +385,8 @@ fn createWin32Window(window: *WindowGen) !void {
         height = win32.ui.windows_and_messaging.GetSystemMetrics(win32.ui.windows_and_messaging.SM_CYSCREEN);
     } else {
         window_style = settings.window_style;
-        x = win32.ui.windows_and_messaging.CW_USEDEFAULT;
-        y = win32.ui.windows_and_messaging.CW_USEDEFAULT;
+        x = settings.start_position.x;
+        y = settings.start_position.y;
         width = @intCast(settings.width);
         height = @intCast(settings.height);
     }

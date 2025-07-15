@@ -6,8 +6,8 @@ const win32 = @import("win32");
 const lang = @import("lang.zig");
 pub const WindowSettings = struct {
     title: []const u8 = "NamiZig Application",
-    width: u32 = 800,
-    height: u32 = 600,
+    width: i32 = 800,
+    height: i32 = 600,
     resizable: bool = true,
     fullscreen: bool = false,
     navigatge_to: ?[:0] const u8 = null,
@@ -48,3 +48,18 @@ pub const ThemeSettings = struct {
     toolbar_button_text_color: u32 = 0x00000000,
     window_background_color: u32 = 0x00FFFFFF,
 };
+
+// Function Section
+
+pub fn GetMainScreenCenterPos(x: i32, y: i32) !WindowStartPostionSettings {
+    const screen_width = win32.ui.windows_and_messaging.GetSystemMetrics(win32.ui.windows_and_messaging.SM_CXSCREEN);
+    const screen_height = win32.ui.windows_and_messaging.GetSystemMetrics(win32.ui.windows_and_messaging.SM_CYSCREEN);
+
+    const window_x = @divTrunc(screen_width - x, 2);
+    const window_y = @divTrunc(screen_height - y, 2);
+
+    return WindowStartPostionSettings{
+        .x = window_x,
+        .y = window_y,
+    };
+}

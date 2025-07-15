@@ -1,0 +1,3 @@
+[submodule "latest_wil"]
+	path = latest_wil
+	url = https://github.com/microsoft/wil
